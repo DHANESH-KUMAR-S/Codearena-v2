@@ -6,6 +6,7 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const CodeExecutionService = require('./services/codeExecutionService');
 const { generateCodingChallenge } = require('./services/challengeService');
+const mongoose = require('mongoose');
 
 const app = express();
 const server = http.createServer(app);
@@ -30,6 +31,11 @@ const codeExecutionService = new CodeExecutionService();
 io.on('error', (error) => {
   console.error('Socket.IO error:', error);
 });
+
+const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/codearena';
+mongoose.connect(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
