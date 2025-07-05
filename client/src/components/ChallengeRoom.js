@@ -30,6 +30,8 @@ const ChallengeRoom = ({ roomId, onExit }) => {
   const [timeLeft, setTimeLeft] = useState(null);
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
   const [startTime, setStartTime] = useState(null);
+  const [hasUserTyped, setHasUserTyped] = useState(false);
+  const isInitialized = React.useRef(false);
 
   useEffect(() => {
     if (!roomId) return;
@@ -46,7 +48,11 @@ const ChallengeRoom = ({ roomId, onExit }) => {
       }
       
       setChallenge(response.challenge);
-      setCode(response.challenge.boilerplateCode[language]);
+      // Only set boilerplate code on first initialization
+      if (!isInitialized.current) {
+        setCode(response.challenge.boilerplateCode[language]);
+        isInitialized.current = true;
+      }
       if (response.started && response.startTime) {
         setStatus('started');
         setStartTime(response.startTime);
@@ -57,6 +63,11 @@ const ChallengeRoom = ({ roomId, onExit }) => {
 
     socket.on('gameStart', ({ challenge, startTime }) => {
       setChallenge(challenge);
+      // Only set boilerplate code on first initialization
+      if (!isInitialized.current) {
+        setCode(challenge.boilerplateCode[language]);
+        isInitialized.current = true;
+      }
       setStatus('started');
       setStartTime(startTime);
       setTimeLeft(challenge.timeLimit);
@@ -145,7 +156,8 @@ const ChallengeRoom = ({ roomId, onExit }) => {
   const handleLanguageChange = (event) => {
     const newLang = event.target.value;
     setLanguage(newLang);
-    if (challenge && challenge.boilerplateCode[newLang]) {
+    // Only reset to boilerplate if user hasn't typed anything yet
+    if (challenge && challenge.boilerplateCode[newLang] && !hasUserTyped) {
       setCode(challenge.boilerplateCode[newLang]);
     }
   };
@@ -277,16 +289,37 @@ const ChallengeRoom = ({ roomId, onExit }) => {
                   <MenuItem value="java">Java</MenuItem>
                 </Select>
               </FormControl>
-              {timeLeft !== null && (
-                <Typography variant="h6" color={timeLeft < 60 ? "error" : "text.primary"}>
-                  Time Left: {formatTime(timeLeft)}
-                </Typography>
-              )}
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    if (challenge && challenge.boilerplateCode[language]) {
+                      setCode(challenge.boilerplateCode[language]);
+                      setHasUserTyped(false);
+                      isInitialized.current = false;
+                    }
+                  }}
+                >
+                  Reset Code
+                </Button>
+                {timeLeft !== null && (
+                  <Typography variant="h6" color={timeLeft < 60 ? "error" : "text.primary"}>
+                    Time Left: {formatTime(timeLeft)}
+                  </Typography>
+                )}
+              </Box>
             </Box>
 
             <EditorWrapper
               value={code}
-              onChange={(value) => setCode(value || '')}
+              onChange={(value) => {
+                setCode(value || '');
+                // Mark that user has started typing
+                if (!hasUserTyped && value && value.trim() !== '') {
+                  setHasUserTyped(true);
+                }
+              }}
               language={language}
               theme="vs-dark"
               options={{

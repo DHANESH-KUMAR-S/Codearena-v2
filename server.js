@@ -8,6 +8,7 @@ const CodeExecutionService = require('./services/codeExecutionService');
 const { generateCodingChallenge } = require('./services/challengeService');
 const mongoose = require('mongoose');
 const Room = require('./models/room');
+const { router: authRouter } = require('./routes/auth');
 
 const app = express();
 const server = http.createServer(app);
@@ -20,6 +21,9 @@ const io = socketIo(server, {
 
 app.use(cors());
 app.use(express.json());
+
+// Auth routes
+app.use('/api/auth', authRouter);
 
 // Store active sessions and games
 const activeSessions = new Map();

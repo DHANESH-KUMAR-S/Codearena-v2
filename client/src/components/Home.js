@@ -4,6 +4,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
 import Container from '@mui/material/Container';
+import Box from '@mui/material/Box';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -27,7 +28,7 @@ const runningTexts = [
   'Fun, competitive, and educational!'
 ];
 
-function Home() {
+function Home({ user, onLogout }) {
   const [mode, setMode] = useState('home'); // 'home', 'practice', 'challenge'
   const [roomId, setRoomId] = useState('');
   const [challenge, setChallenge] = useState(null);
@@ -154,6 +155,40 @@ function Home() {
           animation: 'glow2 8s ease-in-out infinite',
         }}
       />
+      {/* User Header */}
+      <Box sx={{
+        position: 'absolute',
+        top: 20,
+        right: 20,
+        zIndex: 10,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+        background: 'rgba(255, 255, 255, 0.1)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: 3,
+        padding: '8px 16px',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+      }}>
+        <Typography sx={{ color: '#fff', fontWeight: 600 }}>
+          Welcome, {user?.username}!
+        </Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={onLogout}
+          sx={{
+            color: '#fff',
+            borderColor: 'rgba(255, 255, 255, 0.3)',
+            '&:hover': {
+              borderColor: '#fff',
+              background: 'rgba(255, 255, 255, 0.1)',
+            },
+          }}
+        >
+          Logout
+        </Button>
+      </Box>
       <Container maxWidth="sm" sx={{ zIndex: 2, position: 'relative' }}>
         <Paper
           elevation={8}
