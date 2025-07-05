@@ -15,9 +15,15 @@ import Grid from '@mui/material/Grid';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import LogoutIcon from '@mui/icons-material/Logout';
 import CodingChallenge from './CodingChallenge';
 import ChallengeRoom from './ChallengeRoom';
 import { socket } from '../socket';
+import './Login.css';
 
 const runningTexts = [
   'Real-time coding battles',
@@ -39,6 +45,7 @@ function Home({ user, onLogout }) {
   const [snackbar, setSnackbar] = useState('');
   const [loading, setLoading] = useState(false);
   const [textIndex, setTextIndex] = useState(0);
+  const [profileAnchorEl, setProfileAnchorEl] = useState(null);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -46,6 +53,20 @@ function Home({ user, onLogout }) {
     }, 2200);
     return () => clearInterval(interval);
   }, []);
+
+  // Profile menu handlers
+  const handleProfileClick = (event) => {
+    setProfileAnchorEl(event.currentTarget);
+  };
+
+  const handleProfileClose = () => {
+    setProfileAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    handleProfileClose();
+    onLogout();
+  };
 
   // Handlers for UI
   const handleStartPractice = () => setMode('practice');
@@ -107,242 +128,292 @@ function Home({ user, onLogout }) {
     return <CodingChallenge onExit={handleExitChallenge} />;
   }
   if (mode === 'challenge') {
-    return <ChallengeRoom roomId={roomId} challenge={challenge} onExit={handleExitChallenge} />;
+    return <ChallengeRoom roomId={roomId} challenge={challenge} onExit={handleExitChallenge} user={user} onLogout={onLogout} />;
   }
 
   // Home screen
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        width: '100vw',
-        overflow: 'hidden',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        background: 'linear-gradient(120deg, #0f2027, #2c5364, #1a2980, #26d0ce)',
-        backgroundSize: '300% 300%',
-        animation: 'glowBG 12s ease-in-out infinite',
-      }}
-    >
-      {/* Glowy background circles */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '-10%',
-          left: '-10%',
-          width: '400px',
-          height: '400px',
-          background: 'radial-gradient(circle, #00f2fe 0%, #4facfe 80%, transparent 100%)',
-          opacity: 0.5,
-          filter: 'blur(60px)',
-          zIndex: 0,
-          animation: 'glow1 6s ease-in-out infinite',
+    <div className="auth-container">
+      {/* Background with glow orbs */}
+      <div className="auth-background">
+        <div className="glow-orb glow-orb-1"></div>
+        <div className="glow-orb glow-orb-2"></div>
+        <div className="glow-orb glow-orb-3"></div>
+      </div>
+
+      {/* Status Bar */}
+      <Box
+        sx={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '70px',
+          background: 'rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 30px',
+          zIndex: 1000,
         }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '-10%',
-          right: '-10%',
-          width: '400px',
-          height: '400px',
-          background: 'radial-gradient(circle, #43e97b 0%, #38f9d7 80%, transparent 100%)',
-          opacity: 0.5,
-          filter: 'blur(60px)',
-          zIndex: 0,
-          animation: 'glow2 8s ease-in-out infinite',
-        }}
-      />
-      {/* User Header */}
-      <Box sx={{
-        position: 'absolute',
-        top: 20,
-        right: 20,
-        zIndex: 10,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 2,
-        background: 'rgba(255, 255, 255, 0.1)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: 3,
-        padding: '8px 16px',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-      }}>
-        <Typography sx={{ color: '#fff', fontWeight: 600 }}>
-          Welcome, {user?.username}!
-        </Typography>
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={onLogout}
-          sx={{
-            color: '#fff',
-            borderColor: 'rgba(255, 255, 255, 0.3)',
-            '&:hover': {
-              borderColor: '#fff',
+      >
+        {/* Logo */}
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <img 
+            src="/logo.png" 
+            alt="Code Arena" 
+            style={{
+              height: '40px',
+              width: 'auto',
+              filter: 'drop-shadow(0 0 10px rgba(102, 126, 234, 0.6))',
+            }}
+          />
+        </Box>
+
+        {/* Profile Section */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography
+            sx={{
+              color: 'rgba(255, 255, 255, 0.9)',
+              fontWeight: 500,
+              fontSize: '16px',
+            }}
+          >
+            Welcome, {user?.username}!
+          </Typography>
+          <IconButton
+            onClick={handleProfileClick}
+            sx={{
+              color: 'rgba(255, 255, 255, 0.9)',
               background: 'rgba(255, 255, 255, 0.1)',
-            },
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              '&:hover': {
+                background: 'rgba(255, 255, 255, 0.2)',
+                transform: 'scale(1.05)',
+              },
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <AccountCircleIcon sx={{ fontSize: 28 }} />
+          </IconButton>
+        </Box>
+
+        {/* Profile Menu */}
+        <Menu
+          anchorEl={profileAnchorEl}
+          open={Boolean(profileAnchorEl)}
+          onClose={handleProfileClose}
+          PaperProps={{
+            sx: {
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: 2,
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+              mt: 1,
+            }
           }}
         >
-          Logout
-        </Button>
+          <MenuItem onClick={handleLogout} sx={{ minWidth: 150 }}>
+            <ListItemIcon>
+              <LogoutIcon fontSize="small" />
+            </ListItemIcon>
+            <Typography>Logout</Typography>
+          </MenuItem>
+        </Menu>
       </Box>
-      <Container maxWidth="sm" sx={{ zIndex: 2, position: 'relative' }}>
-        <Paper
-          elevation={8}
-          sx={{
-            p: 5,
-            mt: 8,
-            borderRadius: 5,
-            background: 'rgba(20, 30, 60, 0.92)',
-            boxShadow: '0 0 32px #00f2fe44',
-            border: '1.5px solid #00f2fe44',
-            backdropFilter: 'blur(8px)',
-          }}
-        >
-          <Typography
-            variant="h2"
-            align="center"
+
+      {/* Main Content */}
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingTop: '70px',
+          paddingBottom: '40px',
+          position: 'relative',
+          zIndex: 2,
+        }}
+      >
+        <Container maxWidth="sm">
+          <Paper
+            elevation={0}
             sx={{
-              fontWeight: 900,
-              letterSpacing: 2,
-              textShadow: '0 0 32px #00f2fe, 0 0 8px #fff',
-              mb: 1,
-              fontFamily: 'Montserrat, sans-serif',
-              userSelect: 'none',
+              p: 5,
+              borderRadius: 4,
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
             }}
           >
-            Code Arena
-          </Typography>
-          <Typography
-            variant="h5"
-            align="center"
-            sx={{
-              mb: 4,
-              minHeight: 40,
-              fontWeight: 400,
-              color: '#e0e0e0',
-              textShadow: '0 0 8px #00f2fe',
-              fontFamily: 'Fira Mono, monospace',
-              transition: 'opacity 0.5s',
-              opacity: 1,
-              letterSpacing: 1,
-            }}
-          >
-            {runningTexts[textIndex]}
-          </Typography>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <Button
-                variant="contained"
-                size="large"
-                fullWidth
-                onClick={handleStartPractice}
-                disabled={loading}
-                sx={{
-                  px: 6,
-                  py: 1.5,
-                  fontSize: 22,
-                  fontWeight: 700,
-                  borderRadius: 3,
-                  background: 'linear-gradient(90deg, #00f2fe 0%, #4facfe 100%)',
-                  boxShadow: '0 0 24px #00f2fe',
-                  color: '#222',
-                  textShadow: '0 0 8px #fff',
-                  transition: 'transform 0.2s',
-                  '&:hover': {
-                    background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
-                    transform: 'scale(1.07)',
-                    boxShadow: '0 0 40px #43e97b',
-                  },
-                }}
-              >
-                Practice Mode
-              </Button>
+            <Typography
+              variant="h3"
+              align="center"
+              sx={{
+                fontWeight: 700,
+                color: 'rgba(255, 255, 255, 0.95)',
+                mb: 1,
+                fontFamily: 'Montserrat, sans-serif',
+                letterSpacing: 1,
+              }}
+            >
+              Welcome to Code Arena
+            </Typography>
+            <Typography
+              variant="h6"
+              align="center"
+              sx={{
+                mb: 4,
+                minHeight: 40,
+                fontWeight: 400,
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontFamily: 'Inter, sans-serif',
+                transition: 'opacity 0.5s',
+                opacity: 1,
+              }}
+            >
+              {runningTexts[textIndex]}
+            </Typography>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                  onClick={handleStartPractice}
+                  disabled={loading}
+                  sx={{
+                    py: 2,
+                    fontSize: 18,
+                    fontWeight: 600,
+                    borderRadius: 3,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 6px 20px rgba(102, 126, 234, 0.6)',
+                    },
+                    '&:disabled': {
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      color: 'rgba(255, 255, 255, 0.5)',
+                    },
+                  }}
+                >
+                  Practice Mode
+                </Button>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Typography 
+                  variant="body1" 
+                  align="center" 
+                  sx={{ 
+                    my: 2, 
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    fontWeight: 500,
+                  }}
+                >
+                  — OR —
+                </Typography>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                  onClick={handleCreateChallenge}
+                  disabled={loading}
+                  sx={{
+                    py: 2,
+                    fontSize: 18,
+                    fontWeight: 600,
+                    borderRadius: 3,
+                    background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                    color: 'white',
+                    boxShadow: '0 4px 15px rgba(240, 147, 251, 0.4)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #f5576c 0%, #f093fb 100%)',
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 6px 20px rgba(240, 147, 251, 0.6)',
+                    },
+                    '&:disabled': {
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      color: 'rgba(255, 255, 255, 0.5)',
+                    },
+                  }}
+                >
+                  {loading ? 'Creating...' : 'Challenge a Friend'}
+                </Button>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Button
+                  variant="outlined"
+                  size="large"
+                  fullWidth
+                  onClick={() => setJoinDialogOpen(true)}
+                  disabled={loading}
+                  sx={{
+                    py: 2,
+                    fontSize: 18,
+                    fontWeight: 600,
+                    borderRadius: 3,
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      borderColor: 'rgba(255, 255, 255, 0.5)',
+                      transform: 'translateY(-2px)',
+                    },
+                    '&:disabled': {
+                      color: 'rgba(255, 255, 255, 0.3)',
+                      borderColor: 'rgba(255, 255, 255, 0.1)',
+                    },
+                  }}
+                >
+                  Join with Code
+                </Button>
+              </Grid>
             </Grid>
-            <Grid item xs={12}>
-              <Typography variant="h6" align="center" sx={{ my: 2, color: '#aaa' }}>
-                - OR -
-              </Typography>
-            </Grid>
-            <Grid item xs={12}>
-              <Button
-                variant="contained"
-                size="large"
-                fullWidth
-                onClick={handleCreateChallenge}
-                disabled={loading}
-                sx={{
-                  px: 6,
-                  py: 1.5,
-                  fontSize: 22,
-                  fontWeight: 700,
-                  borderRadius: 3,
-                  background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
-                  boxShadow: '0 0 24px #43e97b',
-                  color: '#222',
-                  textShadow: '0 0 8px #fff',
-                  transition: 'transform 0.2s',
-                  '&:hover': {
-                    background: 'linear-gradient(90deg, #00f2fe 0%, #4facfe 100%)',
-                    transform: 'scale(1.07)',
-                    boxShadow: '0 0 40px #00f2fe',
-                  },
-                }}
-              >
-                {loading ? 'Creating...' : 'Create New Challenge'}
-              </Button>
-            </Grid>
-            <Grid item xs={12}>
-              <Button
-                variant="outlined"
-                size="large"
-                fullWidth
-                onClick={() => setJoinDialogOpen(true)}
-                disabled={loading}
-                sx={{
-                  px: 6,
-                  py: 1.5,
-                  fontSize: 22,
-                  fontWeight: 700,
-                  borderRadius: 3,
-                  color: '#43e97b',
-                  borderColor: '#43e97b',
-                  background: 'rgba(67, 233, 123, 0.08)',
-                  boxShadow: '0 0 12px #43e97b44',
-                  textShadow: '0 0 8px #fff',
-                  transition: 'transform 0.2s',
-                  '&:hover': {
-                    background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
-                    color: '#222',
-                    borderColor: '#38f9d7',
-                    transform: 'scale(1.07)',
-                    boxShadow: '0 0 40px #43e97b',
-                  },
-                }}
-              >
-                Join Challenge
-              </Button>
-            </Grid>
-          </Grid>
-        </Paper>
-      </Container>
+          </Paper>
+        </Container>
+      </Box>
+
       {/* Join Challenge Dialog */}
-      <Dialog open={joinDialogOpen} onClose={() => setJoinDialogOpen(false)} PaperProps={{
-        sx: {
-          borderRadius: 4,
-          background: 'rgba(20, 30, 60, 0.97)',
-          color: '#fff',
-          boxShadow: '0 0 32px #00f2fe44',
-          border: '1.5px solid #00f2fe44',
-          backdropFilter: 'blur(8px)',
-        }
-      }}>
-        <DialogTitle sx={{ fontWeight: 700, color: '#00f2fe', textShadow: '0 0 8px #00f2fe' }}>Join Challenge</DialogTitle>
+      <Dialog 
+        open={joinDialogOpen} 
+        onClose={() => setJoinDialogOpen(false)} 
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          fontWeight: 700, 
+          color: '#333',
+          textAlign: 'center',
+        }}>
+          Join Challenge
+        </DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ color: '#e0e0e0' }}>
+          <DialogContentText sx={{ color: '#666', mb: 2 }}>
             Enter the challenge code provided by your friend:
           </DialogContentText>
           <TextField
@@ -354,24 +425,29 @@ function Home({ user, onLogout }) {
             value={joinRoomId}
             onChange={e => setJoinRoomId(e.target.value)}
             sx={{
-              input: { color: '#fff', background: 'rgba(0,0,0,0.12)' },
-              label: { color: '#00f2fe' },
-              fieldset: { borderColor: '#00f2fe' },
-              mt: 2,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+              },
             }}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setJoinDialogOpen(false)} sx={{ color: '#aaa' }}>Cancel</Button>
-          <Button onClick={handleJoinChallenge} color="primary" variant="contained" disabled={loading}
+        <DialogActions sx={{ p: 3, pt: 1 }}>
+          <Button 
+            onClick={() => setJoinDialogOpen(false)} 
+            sx={{ color: '#666' }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleJoinChallenge} 
+            variant="contained" 
+            disabled={loading}
             sx={{
-              background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
-              color: '#222',
-              fontWeight: 700,
-              boxShadow: '0 0 12px #43e97b',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              fontWeight: 600,
               '&:hover': {
-                background: 'linear-gradient(90deg, #00f2fe 0%, #4facfe 100%)',
-                color: '#222',
+                background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
               },
             }}
           >
@@ -379,42 +455,85 @@ function Home({ user, onLogout }) {
           </Button>
         </DialogActions>
       </Dialog>
+
       {/* Create Challenge Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} PaperProps={{
-        sx: {
-          borderRadius: 4,
-          background: 'rgba(20, 30, 60, 0.97)',
-          color: '#fff',
-          boxShadow: '0 0 32px #43e97b44',
-          border: '1.5px solid #43e97b44',
-          backdropFilter: 'blur(8px)',
-        }
-      }}>
-        <DialogTitle sx={{ fontWeight: 700, color: '#43e97b', textShadow: '0 0 8px #43e97b' }}>Challenge Created!</DialogTitle>
+      <Dialog 
+        open={createDialogOpen} 
+        onClose={() => setCreateDialogOpen(false)} 
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          fontWeight: 700, 
+          color: '#333',
+          textAlign: 'center',
+        }}>
+          Challenge Created!
+        </DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ color: '#e0e0e0' }}>
+          <DialogContentText sx={{ color: '#666', mb: 2 }}>
             Share this code with your opponent to start the challenge:
           </DialogContentText>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1, color: '#fff', letterSpacing: 2, fontWeight: 700 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 2, 
+            p: 2,
+            background: 'rgba(102, 126, 234, 0.1)',
+            borderRadius: 2,
+            border: '1px solid rgba(102, 126, 234, 0.2)',
+          }}>
+            <Typography 
+              variant="h6" 
+              component="div" 
+              sx={{ 
+                flexGrow: 1, 
+                color: '#333', 
+                letterSpacing: 2, 
+                fontWeight: 700,
+                fontFamily: 'monospace',
+              }}
+            >
               {roomId}
             </Typography>
-            <IconButton onClick={handleCopyRoomId} color="primary" size="small" sx={{ color: '#43e97b' }}>
+            <IconButton 
+              onClick={handleCopyRoomId} 
+              color="primary" 
+              size="small"
+              sx={{ 
+                color: '#667eea',
+                '&:hover': {
+                  background: 'rgba(102, 126, 234, 0.1)',
+                },
+              }}
+            >
               <ContentCopyIcon />
             </IconButton>
-          </div>
+          </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)} sx={{ color: '#aaa' }}>Cancel</Button>
-          <Button onClick={handleStartChallenge} color="primary" variant="contained"
+        <DialogActions sx={{ p: 3, pt: 1 }}>
+          <Button 
+            onClick={() => setCreateDialogOpen(false)} 
+            sx={{ color: '#666' }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleStartChallenge} 
+            variant="contained"
             sx={{
-              background: 'linear-gradient(90deg, #00f2fe 0%, #4facfe 100%)',
-              color: '#222',
-              fontWeight: 700,
-              boxShadow: '0 0 12px #00f2fe',
+              background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+              color: 'white',
+              fontWeight: 600,
               '&:hover': {
-                background: 'linear-gradient(90deg, #43e97b 0%, #38f9d7 100%)',
-                color: '#222',
+                background: 'linear-gradient(135deg, #f5576c 0%, #f093fb 100%)',
               },
             }}
           >
@@ -422,6 +541,7 @@ function Home({ user, onLogout }) {
           </Button>
         </DialogActions>
       </Dialog>
+
       {/* Error Snackbar */}
       <Snackbar
         open={!!error}
@@ -433,6 +553,7 @@ function Home({ user, onLogout }) {
           {error}
         </Alert>
       </Snackbar>
+
       {/* Success Snackbar */}
       <Snackbar
         open={!!snackbar}

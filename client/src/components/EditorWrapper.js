@@ -1,38 +1,48 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef, useCallback } from 'react';
 import Editor from "@monaco-editor/react";
 
 const EditorWrapper = ({ value, onChange, language, ...props }) => {
-  const wrapperRef = useRef(null);
   const editorRef = useRef(null);
 
-  useEffect(() => {
-    const resizeObserver = new ResizeObserver(() => {
-      if (editorRef.current) {
-        // Debounce the layout call
-        const timeoutId = setTimeout(() => {
-          editorRef.current.layout();
-        }, 0);
-        return () => clearTimeout(timeoutId);
-      }
+  const handleEditorMount = useCallback((editor) => {
+    editorRef.current = editor;
+  }, []);
+
+  const handleEditorWillMount = useCallback((monaco) => {
+    // Configure Monaco to be more stable
+    monaco.editor.defineTheme('custom-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {}
     });
-
-    if (wrapperRef.current) {
-      resizeObserver.observe(wrapperRef.current);
-    }
-
-    return () => {
-      resizeObserver.disconnect();
-    };
   }, []);
 
   return (
-    <div ref={wrapperRef} style={{ width: '100%', height: '400px' }}>
+    <div style={{ width: '100%', height: '400px' }}>
       <Editor
         value={value}
         onChange={onChange}
         language={language === 'cpp' ? 'cpp' : language}
-        onMount={(editor) => {
-          editorRef.current = editor;
+        onMount={handleEditorMount}
+        beforeMount={handleEditorWillMount}
+        theme="custom-dark"
+        options={{
+          ...props.options,
+          automaticLayout: true, // Let Monaco handle its own layout
+          scrollBeyondLastLine: false,
+          minimap: { enabled: false },
+          fontSize: 14,
+          lineNumbers: 'on',
+          tabSize: 4,
+          wordWrap: 'on',
+          overviewRulerBorder: false,
+          scrollbar: {
+            vertical: 'auto',
+            horizontal: 'auto',
+            verticalScrollbarSize: 10,
+            horizontalScrollbarSize: 10
+          }
         }}
         {...props}
       />
