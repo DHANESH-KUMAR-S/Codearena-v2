@@ -74,13 +74,13 @@ function Home() {
       return;
     }
     setLoading(true);
-    socket.emit('joinChallenge', joinRoomId.trim().toUpperCase(), (response) => {
+    socket.emit('joinChallenge', joinRoomId.trim(), (response) => {
       setLoading(false);
       if (response.error) {
         setError(response.error);
         return;
       }
-      setRoomId(joinRoomId.trim().toUpperCase());
+      setRoomId(joinRoomId.trim());
       setChallenge(response.challenge);
       setJoinDialogOpen(false);
       setMode('challenge');

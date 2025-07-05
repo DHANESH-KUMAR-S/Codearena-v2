@@ -7,6 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const CodeExecutionService = require('./services/codeExecutionService');
 const { generateCodingChallenge } = require('./services/challengeService');
 const mongoose = require('mongoose');
+const Room = require('./models/room');
 
 const app = express();
 const server = http.createServer(app);
@@ -63,10 +64,20 @@ io.on('connection', (socket) => {
       const challenge = await generateCodingChallenge();
       console.log('DEBUG: Generated challenge:', challenge.title);
       
-      activeGames.set(roomId, {
+      const gameData = {
         challenge,
         players: [{ id: socket.id, ready: true }],
         solutions: new Map(),
+        started: false,
+        startTime: null
+      };
+      activeGames.set(roomId, gameData);
+      // Save to DB
+      await Room.create({
+        roomId,
+        challenge,
+        players: [{ id: socket.id, ready: true }],
+        solutions: {},
         started: false,
         startTime: null
       });
@@ -83,24 +94,57 @@ io.on('connection', (socket) => {
   });
 
   // Join an existing challenge
-  socket.on('joinChallenge', (roomId, callback) => {
-    const game = activeGames.get(roomId);
-    if (!game) {
+  socket.on('joinChallenge', async (roomId, callback) => {
+    // Always load the latest room state from DB
+    const dbRoom = await Room.findOne({ roomId });
+    if (!dbRoom) {
       callback({ error: 'Game not found' });
       return;
     }
+    // Restore to memory
+    let game = activeGames.get(roomId);
+    if (!game) {
+      game = {
+        challenge: dbRoom.challenge,
+        players: dbRoom.players,
+        solutions: new Map(Object.entries(dbRoom.solutions || {})),
+        started: dbRoom.started,
+        startTime: dbRoom.startTime
+      };
+      activeGames.set(roomId, game);
+    } else {
+      // Sync players and state from DB
+      game.players = dbRoom.players;
+      game.started = dbRoom.started;
+      game.startTime = dbRoom.startTime;
+    }
 
-    game.players.push({ id: socket.id, ready: true });
+    // Add player if not already present
+    if (!game.players.some(p => p.id === socket.id)) {
+      game.players.push({ id: socket.id, ready: true });
+      // Update DB
+      await Room.updateOne({ roomId }, { $push: { players: { id: socket.id, ready: true } } });
+    }
     socket.join(roomId);
 
-    if (game.players.length === 2) {
+    // If two players, start the game
+    if (game.players.length === 2 && !game.started) {
       game.started = true;
       game.startTime = Date.now();
+      await Room.updateOne({ roomId }, { started: true, startTime: game.startTime });
       io.to(roomId).emit('gameStart', { 
         challenge: game.challenge,
         startTime: game.startTime
       });
     }
+
+    // Always emit the current challenge and player list to all in the room
+    io.to(roomId).emit('roomUpdate', {
+      players: game.players,
+      challenge: game.challenge,
+      started: game.started,
+      startTime: game.startTime
+    });
 
     callback({ 
       success: true, 
@@ -176,16 +220,15 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
-    // Clean up any games this player was in
+    // Do NOT remove rooms or players from DB or memory on disconnect.
+    // Only clean up on gameOver.
     for (const [roomId, game] of activeGames.entries()) {
       const playerIndex = game.players.findIndex(p => p.id === socket.id);
       if (playerIndex !== -1) {
-        game.players.splice(playerIndex, 1);
-        if (game.players.length === 0) {
-          activeGames.delete(roomId);
-        } else {
-          io.to(roomId).emit('playerLeft', { playerId: socket.id });
-        }
+        // Optionally, mark player as disconnected (not removing from list)
+        // game.players[playerIndex].ready = false;
+        // Optionally, emit playerLeft event
+        io.to(roomId).emit('playerLeft', { playerId: socket.id });
       }
     }
   });
