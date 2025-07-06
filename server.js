@@ -5,10 +5,11 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const CodeExecutionService = require('./services/codeExecutionService');
-const { generateCodingChallenge } = require('./services/challengeService');
+const { generateCodingChallenge, getAllChallenges } = require('./services/challengeService');
 const mongoose = require('mongoose');
 const Room = require('./models/room');
 const { router: authRouter } = require('./routes/auth');
+const { generatePracticeChallengesGemini } = require('./services/geminiService');
 
 const app = express();
 const server = http.createServer(app);
@@ -28,6 +29,7 @@ app.use('/api/auth', authRouter);
 // Store active sessions and games
 const activeSessions = new Map();
 const activeGames = new Map();
+const activePracticeChallenges = new Map();
 
 // Initialize code execution service
 const codeExecutionService = new CodeExecutionService();
@@ -222,8 +224,69 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Practice mode handlers
+  socket.on('getPracticeChallenges', async (callback) => {
+    console.log('Server: Received getPracticeChallenges request from:', socket.id);
+    try {
+      let challenges, source;
+      try {
+        console.log('Server: Requesting Gemini challenges...');
+        challenges = await generatePracticeChallengesGemini(5);
+        source = 'gemini';
+        console.log('Server: Gemini returned', challenges.length, 'challenges');
+        // Store Gemini challenges for this socket
+        activePracticeChallenges.set(socket.id, challenges);
+      } catch (aiError) {
+        console.error('Server: Gemini failed, falling back to sample challenges:', aiError.message);
+        challenges = getAllChallenges();
+        source = 'fallback';
+        // Store fallback challenges for this socket
+        activePracticeChallenges.set(socket.id, challenges);
+      }
+      if (!challenges || challenges.length === 0) {
+        callback({ error: 'No challenges available' });
+        return;
+      }
+      callback({ challenges, source });
+    } catch (error) {
+      console.error('Server: Error getting practice challenges:', error);
+      callback({ error: error.message || 'Failed to get practice challenges' });
+    }
+  });
+
+  socket.on('submitPracticeSolution', async ({ code, language, challengeId }) => {
+    try {
+      // Look up the challenge in the activePracticeChallenges map for this socket
+      const challenges = activePracticeChallenges.get(socket.id) || [];
+      let challenge = challenges.find(c => c.id === challengeId);
+      if (!challenge) {
+        // Fallback to global set
+        const fallback = getAllChallenges();
+        challenge = fallback.find(c => c.id === challengeId);
+      }
+      if (!challenge) {
+        socket.emit('practiceSubmissionResult', { 
+          error: 'Challenge not found' 
+        });
+        return;
+      }
+      const validation = await codeExecutionService.validateSubmission(
+        code,
+        language,
+        challenge.testCases
+      );
+      socket.emit('practiceSubmissionResult', validation);
+    } catch (error) {
+      console.error('Error processing practice submission:', error);
+      socket.emit('practiceSubmissionResult', {
+        error: error.message || 'Failed to process submission'
+      });
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
+    activePracticeChallenges.delete(socket.id);
     // Do NOT remove rooms or players from DB or memory on disconnect.
     // Only clean up on gameOver.
     for (const [roomId, game] of activeGames.entries()) {

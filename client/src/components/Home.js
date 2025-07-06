@@ -22,6 +22,7 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import LogoutIcon from '@mui/icons-material/Logout';
 import CodingChallenge from './CodingChallenge';
 import ChallengeRoom from './ChallengeRoom';
+import PracticeRoom from './PracticeRoom';
 import { socket } from '../socket';
 import './Login.css';
 
@@ -125,7 +126,7 @@ function Home({ user, onLogout }) {
 
   // Main UI
   if (mode === 'practice') {
-    return <CodingChallenge onExit={handleExitChallenge} />;
+    return <PracticeRoom onExit={handleExitChallenge} user={user} onLogout={onLogout} />;
   }
   if (mode === 'challenge') {
     return <ChallengeRoom roomId={roomId} challenge={challenge} onExit={handleExitChallenge} user={user} onLogout={onLogout} />;
