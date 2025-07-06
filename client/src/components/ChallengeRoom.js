@@ -29,11 +29,12 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import SentimentVeryDissatisfiedIcon from '@mui/icons-material/SentimentVeryDissatisfied';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import LogoutIcon from '@mui/icons-material/Logout';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import EditorWrapper from './EditorWrapper';
 import { socket } from '../socket';
 import './Login.css';
 
-const ChallengeRoom = ({ roomId, onExit, user, onLogout }) => {
+const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit, user, onLogout }) => {
   const [challenge, setChallenge] = useState(null);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('python');
@@ -49,6 +50,7 @@ const ChallengeRoom = ({ roomId, onExit, user, onLogout }) => {
   const [finalTimeRemaining, setFinalTimeRemaining] = useState(null);
   const [someoneWon, setSomeoneWon] = useState(false);
   const [profileAnchorEl, setProfileAnchorEl] = useState(null);
+  const [challengeSource, setChallengeSource] = useState(initialChallengeSource);
   const isInitialized = React.useRef(false);
 
   // Profile menu handlers
@@ -80,6 +82,7 @@ const ChallengeRoom = ({ roomId, onExit, user, onLogout }) => {
       }
       
       setChallenge(response.challenge);
+      setChallengeSource(response.challengeSource);
       // Only set boilerplate code on first initialization
       if (!isInitialized.current) {
         setCode(response.challenge.boilerplateCode[language]);
@@ -93,8 +96,9 @@ const ChallengeRoom = ({ roomId, onExit, user, onLogout }) => {
       }
     });
 
-    socket.on('gameStart', ({ challenge, startTime }) => {
+    socket.on('gameStart', ({ challenge, challengeSource, startTime }) => {
       setChallenge(challenge);
+      setChallengeSource(challengeSource);
       // Only set boilerplate code on first initialization
       if (!isInitialized.current) {
         setCode(challenge.boilerplateCode[language]);
@@ -380,14 +384,28 @@ const ChallengeRoom = ({ roomId, onExit, user, onLogout }) => {
               <Typography variant="h5" gutterBottom sx={{ color: 'rgba(255, 255, 255, 0.95)' }}>
                 {challenge.title}
               </Typography>
-              <Chip 
-                label={challenge.difficulty.toUpperCase()} 
-                color={
-                  challenge.difficulty === 'easy' ? 'success' : 
-                  challenge.difficulty === 'medium' ? 'warning' : 'error'
-                }
-                sx={{ mb: 2 }}
-              />
+              <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                <Chip 
+                  label={challenge.difficulty.toUpperCase()} 
+                  color={
+                    challenge.difficulty === 'easy' ? 'success' : 
+                    challenge.difficulty === 'medium' ? 'warning' : 'error'
+                  }
+                />
+                {challengeSource === 'gemini' && (
+                  <Chip 
+                    label="AI Generated" 
+                    color="primary"
+                    size="small"
+                    icon={<AutoAwesomeIcon />}
+                    sx={{ 
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      fontSize: '0.75rem',
+                    }}
+                  />
+                )}
+              </Box>
               <Typography variant="body1" sx={{ whiteSpace: 'pre-line', mb: 2, color: 'rgba(255, 255, 255, 0.8)' }}>
                 {challenge.description}
               </Typography>

@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { generateChallenge } = require('./groqService');
+const { generateChallengeGemini } = require('./geminiService');
 const { LANGUAGE_BOILERPLATES } = require('../config/judge0');
 
 // Sample challenges for demonstration
@@ -378,12 +379,14 @@ public class Main {
 
 async function generateCodingChallenge() {
   try {
-    // Try to generate a challenge using Groq
-    const challenge = await generateChallenge();
+    // Try to generate a challenge using Gemini
+    console.log('Attempting to generate challenge with Gemini...');
+    const challenge = await generateChallengeGemini();
+    console.log('Successfully generated challenge with Gemini:', challenge.title);
     return challenge;
   } catch (error) {
-    console.error('Failed to generate challenge with Groq, falling back to sample:', error);
-    // Fall back to a random sample challenge if Groq fails
+    console.error('Failed to generate challenge with Gemini, falling back to sample:', error);
+    // Fall back to a random sample challenge if Gemini fails
     const randomIndex = Math.floor(Math.random() * SAMPLE_CHALLENGES.length);
     return SAMPLE_CHALLENGES[randomIndex];
   }

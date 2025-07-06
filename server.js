@@ -9,7 +9,7 @@ const { generateCodingChallenge, getAllChallenges } = require('./services/challe
 const mongoose = require('mongoose');
 const Room = require('./models/room');
 const { router: authRouter } = require('./routes/auth');
-const { generatePracticeChallengesGemini } = require('./services/geminiService');
+const { generatePracticeChallengesGemini, generateChallengeGemini } = require('./services/geminiService');
 
 const app = express();
 const server = http.createServer(app);
@@ -30,6 +30,7 @@ app.use('/api/auth', authRouter);
 const activeSessions = new Map();
 const activeGames = new Map();
 const activePracticeChallenges = new Map();
+const activeChallengeChallenges = new Map(); // Store Gemini-generated challenges for challenge mode
 
 // Initialize code execution service
 const codeExecutionService = new CodeExecutionService();
@@ -67,11 +68,27 @@ io.on('connection', (socket) => {
       const roomId = uuidv4();
       console.log('DEBUG: Generated room ID:', roomId);
       
-      const challenge = await generateCodingChallenge();
-      console.log('DEBUG: Generated challenge:', challenge.title);
+      let challenge, source;
+      try {
+        console.log('DEBUG: Requesting Gemini challenge...');
+        challenge = await generateChallengeGemini();
+        source = 'gemini';
+        console.log('DEBUG: Gemini returned challenge:', challenge.title);
+        console.log('DEBUG: Full challenge object:', JSON.stringify(challenge, null, 2));
+        // Store Gemini challenge for this room
+        activeChallengeChallenges.set(roomId, challenge);
+      } catch (aiError) {
+        console.error('DEBUG: Gemini failed, falling back to sample challenge:', aiError.message);
+        challenge = await generateCodingChallenge(); // This will use fallback
+        source = 'fallback';
+        console.log('DEBUG: Fallback challenge:', challenge.title);
+        // Store fallback challenge for this room
+        activeChallengeChallenges.set(roomId, challenge);
+      }
       
       const gameData = {
         challenge,
+        challengeSource: source,
         players: [{ id: socket.id, ready: true }],
         solutions: new Map(),
         started: false,
@@ -82,6 +99,7 @@ io.on('connection', (socket) => {
       await Room.create({
         roomId,
         challenge,
+        challengeSource: source,
         players: [{ id: socket.id, ready: true }],
         solutions: {},
         started: false,
@@ -91,8 +109,8 @@ io.on('connection', (socket) => {
       socket.join(roomId);
       console.log('DEBUG: Socket joined room:', roomId);
       
-      callback({ roomId, challenge });
-      console.log('DEBUG: Sent challenge response to client:', { roomId, challengeTitle: challenge.title });
+      callback({ roomId, challenge, source });
+      console.log('DEBUG: Sent challenge response to client:', { roomId, challengeTitle: challenge.title, source });
     } catch (error) {
       console.error('DEBUG: Error creating challenge:', error);
       callback({ error: error.message || 'Failed to create challenge' });
@@ -112,6 +130,7 @@ io.on('connection', (socket) => {
     if (!game) {
       game = {
         challenge: dbRoom.challenge,
+        challengeSource: dbRoom.challengeSource,
         players: dbRoom.players,
         solutions: new Map(Object.entries(dbRoom.solutions || {})),
         started: dbRoom.started,
@@ -127,7 +146,7 @@ io.on('connection', (socket) => {
 
     // Add player if not already present
     if (!game.players.some(p => p.id === socket.id)) {
-      game.players.push({ id: socket.id, ready: true });
+    game.players.push({ id: socket.id, ready: true });
       // Update DB
       await Room.updateOne({ roomId }, { $push: { players: { id: socket.id, ready: true } } });
     }
@@ -140,6 +159,7 @@ io.on('connection', (socket) => {
       await Room.updateOne({ roomId }, { started: true, startTime: game.startTime });
       io.to(roomId).emit('gameStart', { 
         challenge: game.challenge,
+        challengeSource: game.challengeSource,
         startTime: game.startTime
       });
     }
@@ -155,6 +175,7 @@ io.on('connection', (socket) => {
     callback({ 
       success: true, 
       challenge: game.challenge,
+      challengeSource: game.challengeSource,
       started: game.started,
       startTime: game.startTime
     });
@@ -171,10 +192,14 @@ io.on('connection', (socket) => {
     }
 
     try {
+      // Look up the challenge in the activeChallengeChallenges map for this room
+      const storedChallenge = activeChallengeChallenges.get(roomId);
+      const challengeToUse = storedChallenge || game.challenge;
+      
       const validation = await codeExecutionService.validateSubmission(
         code,
         language,
-        game.challenge.testCases
+        challengeToUse.testCases
       );
       
       // Store the solution
@@ -198,6 +223,7 @@ io.on('connection', (socket) => {
           }))
         });
         activeGames.delete(roomId);
+        activeChallengeChallenges.delete(roomId); // Clean up stored challenge
       }
     } catch (error) {
       console.error('Error processing submission:', error);
@@ -295,7 +321,7 @@ io.on('connection', (socket) => {
         // Optionally, mark player as disconnected (not removing from list)
         // game.players[playerIndex].ready = false;
         // Optionally, emit playerLeft event
-        io.to(roomId).emit('playerLeft', { playerId: socket.id });
+          io.to(roomId).emit('playerLeft', { playerId: socket.id });
       }
     }
   });
