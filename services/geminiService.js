@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const apiKey = "AIzaSyCOFOoppNQRakvBcKyKmWHEHpMBPODi9s4";
+const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCOFOoppNQRakvBcKyKmWHEHpMBPODi9s4";
 const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
 const practicePrompt = `Generate an array of 5 unique coding challenges in JSON format. Each challenge should have the following structure:
@@ -137,7 +137,26 @@ async function generatePracticeChallengesGemini(n = 5, difficulty = 'Beginner') 
     }
     // Optionally, slice to n challenges
     challenges = Array.isArray(challenges) ? challenges.slice(0, n) : [];
-    challenges.forEach(enforceTraditionalBoilerplate);
+    
+    // Validate and sanitize test cases to ensure they are strings
+    challenges.forEach(challenge => {
+      if (challenge.testCases && Array.isArray(challenge.testCases)) {
+        challenge.testCases = challenge.testCases.map(testCase => {
+          if (Array.isArray(testCase.input)) {
+            console.log('Warning: AI generated array input in practice challenge, converting to string:', testCase.input);
+          }
+          if (Array.isArray(testCase.output)) {
+            console.log('Warning: AI generated array output in practice challenge, converting to string:', testCase.output);
+          }
+          return {
+            input: Array.isArray(testCase.input) ? testCase.input.join('\n') : String(testCase.input || ''),
+            output: Array.isArray(testCase.output) ? testCase.output.join('\n') : String(testCase.output || '')
+          };
+        });
+      }
+      enforceTraditionalBoilerplate(challenge);
+    });
+    
     return challenges;
   } catch (error) {
     console.error('Gemini API error:', error.response?.data || error.message);
@@ -185,6 +204,22 @@ async function generateChallengeGemini(difficulty = 'Beginner') {
         throw new Error('Failed to parse Gemini JSON');
       }
     }
+    // Validate and sanitize test cases to ensure they are strings
+    if (challenge.testCases && Array.isArray(challenge.testCases)) {
+      challenge.testCases = challenge.testCases.map(testCase => {
+        if (Array.isArray(testCase.input)) {
+          console.log('Warning: AI generated array input, converting to string:', testCase.input);
+        }
+        if (Array.isArray(testCase.output)) {
+          console.log('Warning: AI generated array output, converting to string:', testCase.output);
+        }
+        return {
+          input: Array.isArray(testCase.input) ? testCase.input.join('\n') : String(testCase.input || ''),
+          output: Array.isArray(testCase.output) ? testCase.output.join('\n') : String(testCase.output || '')
+        };
+      });
+    }
+    
     enforceTraditionalBoilerplate(challenge);
     return challenge;
   } catch (error) {

@@ -39,6 +39,14 @@ class CodeExecutionService {
       };
     }
 
+    // Ensure input is a string - handle cases where AI generates arrays
+    if (Array.isArray(input)) {
+      console.log('Warning: Input was an array, converting to string:', input);
+      input = input.join('\n');
+    } else {
+      input = String(input || '');
+    }
+
     // Remove Judge0 block for Java, revert to Docker logic
     const config = this.languageConfigs[language];
     if (!config) {
@@ -447,17 +455,27 @@ class CodeExecutionService {
     let allTestsPassed = true;
 
     for (const testCase of testCases) {
-      const result = await this.executeCode(code, language, testCase.input);
+      // Ensure input is a string - handle cases where AI generates arrays
+      let input = testCase.input;
+      if (Array.isArray(input)) {
+        console.log('Warning: Test case input was an array, converting to string:', input);
+        input = input.join('\n');
+      } else {
+        input = String(input || '');
+      }
+
+      const result = await this.executeCode(code, language, input);
+      
       // Always compare as strings
-      const expected = String(testCase.output).trim();
-      const actual = String(result.output).trim();
+      const expected = String(testCase.output || '').trim();
+      const actual = String(result.output || '').trim();
       const passed = actual === expected;
       if (!passed) allTestsPassed = false;
       results.push({
         passed,
-        input: testCase.input,
-        expected: testCase.output,
-        actual: result.output,
+        input: input,
+        expected: expected,
+        actual: actual,
         error: result.error,
         status: result.status,
         time: result.time,
