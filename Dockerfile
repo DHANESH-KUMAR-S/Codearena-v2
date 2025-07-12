@@ -1,5 +1,6 @@
 FROM node:16-alpine
 
+# Create app directory and set permissions
 WORKDIR /app
 
 # Install Docker client and other dependencies
@@ -15,10 +16,16 @@ COPY . .
 # Build the React client
 WORKDIR /app/client
 COPY client/package*.json ./
+
 # Install all dependencies (including dev dependencies) for client build
 RUN npm ci
-COPY client/ .
-RUN npm run build
+
+# Copy client source code
+COPY client/ ./
+
+# Fix permissions and run build with npx
+RUN chmod +x node_modules/.bin/react-scripts
+RUN npx react-scripts build
 
 # Back to main directory
 WORKDIR /app
