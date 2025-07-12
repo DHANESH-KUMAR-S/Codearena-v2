@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const CodeExecutionService = require('./services/codeExecutionService');
 const { generateCodingChallenge, getAllChallenges } = require('./services/challengeService');
@@ -25,6 +26,19 @@ app.use(express.json());
 
 // Auth routes
 app.use('/api/auth', authRouter);
+
+// Serve static files from the React build
+app.use(express.static(path.join(__dirname, 'client/build')));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Handle React routing, return all requests to React app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+});
 
 // Store active sessions and games
 const activeSessions = new Map();
@@ -474,11 +488,6 @@ io.on('connection', (socket) => {
       }
     }
   });
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
 const PORT = process.env.PORT || 5000;
