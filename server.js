@@ -31,6 +31,7 @@ const activeSessions = new Map();
 const activeGames = new Map();
 const activePracticeChallenges = new Map();
 const activeChallengeChallenges = new Map(); // Store Gemini-generated challenges for challenge mode
+const rematchRequests = new Map(); // Store rematch requests for each room
 
 // Initialize code execution service
 const codeExecutionService = new CodeExecutionService();
@@ -62,8 +63,16 @@ io.on('connection', (socket) => {
   });
 
   // Create a new challenge room
-  socket.on('createChallenge', async (callback) => {
-    console.log('DEBUG: Received createChallenge request from:', socket.id);
+  socket.on('createChallenge', async (dataOrCallback, maybeCallback) => {
+    let callback, difficulty;
+    if (typeof dataOrCallback === 'function') {
+      callback = dataOrCallback;
+      difficulty = 'Beginner';
+    } else {
+      difficulty = dataOrCallback.difficulty || 'Beginner';
+      callback = maybeCallback;
+    }
+    console.log('DEBUG: Received createChallenge request from:', socket.id, 'difficulty:', difficulty);
     try {
       const roomId = uuidv4();
       console.log('DEBUG: Generated room ID:', roomId);
@@ -71,7 +80,7 @@ io.on('connection', (socket) => {
       let challenge, source;
       try {
         console.log('DEBUG: Requesting Gemini challenge...');
-        challenge = await generateChallengeGemini();
+        challenge = await generateChallengeGemini(difficulty);
         source = 'gemini';
         console.log('DEBUG: Gemini returned challenge:', challenge.title);
         console.log('DEBUG: Full challenge object:', JSON.stringify(challenge, null, 2));
@@ -92,7 +101,8 @@ io.on('connection', (socket) => {
         players: [{ id: socket.id, ready: true }],
         solutions: new Map(),
         started: false,
-        startTime: null
+        startTime: null,
+        selectedDifficulty: difficulty
       };
       activeGames.set(roomId, gameData);
       // Save to DB
@@ -103,13 +113,14 @@ io.on('connection', (socket) => {
         players: [{ id: socket.id, ready: true }],
         solutions: {},
         started: false,
-        startTime: null
+        startTime: null,
+        selectedDifficulty: difficulty
       });
 
       socket.join(roomId);
       console.log('DEBUG: Socket joined room:', roomId);
       
-      callback({ roomId, challenge, source });
+      callback({ roomId, challenge, source, selectedDifficulty: difficulty });
       console.log('DEBUG: Sent challenge response to client:', { roomId, challengeTitle: challenge.title, source });
     } catch (error) {
       console.error('DEBUG: Error creating challenge:', error);
@@ -118,7 +129,15 @@ io.on('connection', (socket) => {
   });
 
   // Join an existing challenge
-  socket.on('joinChallenge', async (roomId, callback) => {
+  socket.on('joinChallenge', async (dataOrCallback, maybeCallback) => {
+    let callback, roomId;
+    if (typeof dataOrCallback === 'string') {
+      roomId = dataOrCallback;
+      callback = maybeCallback;
+    } else {
+      roomId = dataOrCallback.roomId;
+      callback = maybeCallback;
+    }
     // Always load the latest room state from DB
     const dbRoom = await Room.findOne({ roomId });
     if (!dbRoom) {
@@ -134,7 +153,8 @@ io.on('connection', (socket) => {
         players: dbRoom.players,
         solutions: new Map(Object.entries(dbRoom.solutions || {})),
         started: dbRoom.started,
-        startTime: dbRoom.startTime
+        startTime: dbRoom.startTime,
+        selectedDifficulty: dbRoom.selectedDifficulty
       };
       activeGames.set(roomId, game);
     } else {
@@ -142,6 +162,7 @@ io.on('connection', (socket) => {
       game.players = dbRoom.players;
       game.started = dbRoom.started;
       game.startTime = dbRoom.startTime;
+      game.selectedDifficulty = dbRoom.selectedDifficulty;
     }
 
     // Add player if not already present
@@ -177,7 +198,8 @@ io.on('connection', (socket) => {
       challenge: game.challenge,
       challengeSource: game.challengeSource,
       started: game.started,
-      startTime: game.startTime
+      startTime: game.startTime,
+      selectedDifficulty: game.selectedDifficulty
     });
   });
 
@@ -214,6 +236,9 @@ io.on('connection', (socket) => {
 
       // If player won, end the game
       if (validation.passed) {
+        // Store player information for potential rematch before deleting
+        const playersForRematch = game.players;
+        
         io.to(roomId).emit('gameOver', {
           winnerId: socket.id,
           solutions: Array.from(game.solutions.entries()).map(([playerId, solution]) => ({
@@ -222,6 +247,15 @@ io.on('connection', (socket) => {
             results: solution.validation
           }))
         });
+        
+        // Store players for rematch before cleaning up
+        if (!rematchRequests.has(roomId)) {
+          rematchRequests.set(roomId, {
+            requests: new Set(),
+            players: playersForRematch
+          });
+        }
+        
         activeGames.delete(roomId);
         activeChallengeChallenges.delete(roomId); // Clean up stored challenge
       }
@@ -231,6 +265,113 @@ io.on('connection', (socket) => {
         error: error.message || 'Failed to process submission'
       });
     }
+  });
+
+  // Handle rematch requests
+  socket.on('requestRematch', async ({ roomId, difficulty }) => {
+    console.log('Rematch requested for room:', roomId, 'by player:', socket.id);
+    
+    // Get the stored rematch data or create new one
+    let roomRematchData = rematchRequests.get(roomId);
+    if (!roomRematchData) {
+      console.log('No rematch data found for room:', roomId);
+      return;
+    }
+    
+    roomRematchData.requests.add(socket.id);
+    
+    // Notify all players in the room about the rematch request
+    io.to(roomId).emit('rematchRequested', {
+      requestingPlayer: socket.id,
+      totalRequests: roomRematchData.requests.size
+    });
+    
+    // If both players have requested rematch, start a new game
+    if (roomRematchData.requests.size === 2) {
+      try {
+        console.log('Both players requested rematch, generating new challenge...');
+        
+        // Generate a new challenge
+        let newChallenge, source;
+        try {
+          newChallenge = await generateChallengeGemini(difficulty);
+          source = 'gemini';
+          console.log('Generated new challenge for rematch:', newChallenge.title);
+        } catch (aiError) {
+          console.error('Failed to generate new challenge with Gemini, using fallback:', aiError.message);
+          newChallenge = await generateCodingChallenge();
+          source = 'fallback';
+        }
+        
+        // Store the new challenge
+        activeChallengeChallenges.set(roomId, newChallenge);
+        
+        // Create new game state with the stored players
+        const gameData = {
+          challenge: newChallenge,
+          challengeSource: source,
+          players: roomRematchData.players, // Use the stored players
+          solutions: new Map(),
+          started: false,
+          startTime: null,
+          selectedDifficulty: difficulty
+        };
+        activeGames.set(roomId, gameData);
+        
+        // Update DB
+        await Room.updateOne(
+          { roomId },
+          { 
+            challenge: newChallenge,
+            challengeSource: source,
+            solutions: {},
+            started: false,
+            startTime: null,
+            selectedDifficulty: difficulty
+          }
+        );
+        
+        // Notify all players that rematch is starting
+        io.to(roomId).emit('rematchStarting', {
+          challenge: newChallenge,
+          challengeSource: source,
+          selectedDifficulty: difficulty
+        });
+        
+        // Start the game immediately
+        gameData.started = true;
+        gameData.startTime = Date.now();
+        await Room.updateOne({ roomId }, { started: true, startTime: gameData.startTime });
+        
+        io.to(roomId).emit('gameStart', { 
+          challenge: newChallenge,
+          challengeSource: source,
+          startTime: gameData.startTime
+        });
+        
+        // Clean up rematch requests
+        rematchRequests.delete(roomId);
+        
+      } catch (error) {
+        console.error('Error starting rematch:', error);
+        io.to(roomId).emit('rematchError', {
+          error: 'Failed to start rematch. Please try again.'
+        });
+      }
+    }
+  });
+
+  // Handle rematch decline
+  socket.on('declineRematch', ({ roomId }) => {
+    console.log('Rematch declined for room:', roomId, 'by player:', socket.id);
+    
+    // Remove the room from rematch requests
+    rematchRequests.delete(roomId);
+    
+    // Notify all players that rematch was declined
+    io.to(roomId).emit('rematchDeclined', {
+      decliningPlayer: socket.id
+    });
   });
 
   // Regular code execution (not challenge)
@@ -251,13 +392,21 @@ io.on('connection', (socket) => {
   });
 
   // Practice mode handlers
-  socket.on('getPracticeChallenges', async (callback) => {
-    console.log('Server: Received getPracticeChallenges request from:', socket.id);
+  socket.on('getPracticeChallenges', async (dataOrCallback, maybeCallback) => {
+    let callback, difficulty;
+    if (typeof dataOrCallback === 'function') {
+      callback = dataOrCallback;
+      difficulty = 'Beginner';
+    } else {
+      difficulty = dataOrCallback.difficulty || 'Beginner';
+      callback = maybeCallback;
+    }
+    console.log('Server: Received getPracticeChallenges request from:', socket.id, 'difficulty:', difficulty);
     try {
       let challenges, source;
       try {
         console.log('Server: Requesting Gemini challenges...');
-        challenges = await generatePracticeChallengesGemini(5);
+        challenges = await generatePracticeChallengesGemini(5, difficulty);
         source = 'gemini';
         console.log('Server: Gemini returned', challenges.length, 'challenges');
         // Store Gemini challenges for this socket

@@ -33,7 +33,7 @@ import EditorWrapper from './EditorWrapper';
 import { socket } from '../socket';
 import './Login.css';
 
-const PracticeRoom = ({ onExit, user, onLogout }) => {
+const PracticeRoom = ({ onExit, user, onLogout, difficulty = 'Beginner' }) => {
   const [challenges, setChallenges] = useState([]);
   const [currentChallengeIndex, setCurrentChallengeIndex] = useState(0);
   const [challenge, setChallenge] = useState(null);
@@ -81,7 +81,7 @@ const PracticeRoom = ({ onExit, user, onLogout }) => {
     }
     
     requestChallenges();
-  }, [language]);
+  }, [difficulty]);
 
   const requestChallenges = () => {
     const timeout = setTimeout(() => {
@@ -96,7 +96,7 @@ const PracticeRoom = ({ onExit, user, onLogout }) => {
     setChallengeSource(null);
     setStatus('loading');
 
-    socket.emit('getPracticeChallenges', (response) => {
+    socket.emit('getPracticeChallenges', { difficulty }, (response) => {
       clearTimeout(timeout);
       if (response.error) {
         setNotification({
@@ -109,7 +109,7 @@ const PracticeRoom = ({ onExit, user, onLogout }) => {
       }
       setChallenges(response.challenges);
       setChallenge(response.challenges[0]);
-      setCode(response.challenges[0].boilerplateCode[language]);
+      setCode((response.challenges[0].boilerplateCode && response.challenges[0].boilerplateCode[language]) || '');
       setStatus('ready');
       setChallengeSource(response.source);
       isInitialized.current = true;
@@ -130,10 +130,12 @@ const PracticeRoom = ({ onExit, user, onLogout }) => {
   const handleLanguageChange = (event) => {
     const newLang = event.target.value;
     setLanguage(newLang);
-    // Only reset to boilerplate if user hasn't typed anything yet
-    if (challenge && challenge.boilerplateCode[newLang] && !hasUserTyped) {
-      setCode(challenge.boilerplateCode[newLang]);
+    // Always reset to boilerplate for the new language
+    let newCode = '';
+    if (challenge && challenge.boilerplateCode && challenge.boilerplateCode[newLang]) {
+      newCode = challenge.boilerplateCode[newLang];
     }
+    setCode(typeof newCode === 'string' ? newCode : '');
   };
 
   const handleSubmit = () => {
@@ -160,7 +162,7 @@ const PracticeRoom = ({ onExit, user, onLogout }) => {
     setSolvedProblems(0);
     setCurrentChallengeIndex(0);
     setChallenge(challenges[0]);
-    setCode(challenges[0].boilerplateCode[language]);
+    setCode((challenges[0].boilerplateCode && challenges[0].boilerplateCode[language]) || '');
     setResult(null);
     setHasUserTyped(false);
     isInitialized.current = true;
@@ -197,7 +199,7 @@ const PracticeRoom = ({ onExit, user, onLogout }) => {
       const nextIndex = currentChallengeIndex + 1;
       setCurrentChallengeIndex(nextIndex);
       setChallenge(challenges[nextIndex]);
-      setCode(challenges[nextIndex].boilerplateCode[language]);
+      setCode((challenges[nextIndex].boilerplateCode && challenges[nextIndex].boilerplateCode[language]) || '');
       setResult(null);
       setHasUserTyped(false);
       isInitialized.current = true;
@@ -435,10 +437,10 @@ const PracticeRoom = ({ onExit, user, onLogout }) => {
                     {challenge.title}
                   </Typography>
                   <Chip 
-                    label={challenge.difficulty.toUpperCase()} 
+                    label={difficulty ? difficulty.toUpperCase() : (challenge.difficulty || '').toUpperCase()} 
                     color={
-                      challenge.difficulty === 'easy' ? 'success' : 
-                      challenge.difficulty === 'medium' ? 'warning' : 'error'
+                      (difficulty === 'Beginner' || challenge.difficulty === 'easy') ? 'success' : 
+                      (difficulty === 'Intermediate' || challenge.difficulty === 'medium') ? 'warning' : 'error'
                     }
                     sx={{ mb: 2 }}
                   />
@@ -549,8 +551,8 @@ const PracticeRoom = ({ onExit, user, onLogout }) => {
                     variant="outlined"
                     size="small"
                     onClick={() => {
-                      if (challenge && challenge.boilerplateCode[language]) {
-                        setCode(challenge.boilerplateCode[language]);
+                      if (challenge && challenge.boilerplateCode && challenge.boilerplateCode[language]) {
+                        setCode((challenge && challenge.boilerplateCode && challenge.boilerplateCode[language]) || '');
                         setHasUserTyped(false);
                         isInitialized.current = false;
                       }
@@ -588,6 +590,7 @@ const PracticeRoom = ({ onExit, user, onLogout }) => {
               </Box>
 
               <EditorWrapper
+                key={language}
                 value={code}
                 onChange={(value) => {
                   setCode(value || '');
@@ -596,7 +599,7 @@ const PracticeRoom = ({ onExit, user, onLogout }) => {
                     setHasUserTyped(true);
                   }
                 }}
-                language={language}
+                language={language === 'cpp' ? 'cpp' : language}
                 theme="vs-dark"
                 options={{
                   minimap: { enabled: false },

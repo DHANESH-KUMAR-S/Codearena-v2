@@ -34,7 +34,7 @@ import EditorWrapper from './EditorWrapper';
 import { socket } from '../socket';
 import './Login.css';
 
-const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit, user, onLogout }) => {
+const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit, user, onLogout, difficulty: initialDifficulty = 'Beginner' }) => {
   const [challenge, setChallenge] = useState(null);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('python');
@@ -51,6 +51,11 @@ const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit
   const [someoneWon, setSomeoneWon] = useState(false);
   const [profileAnchorEl, setProfileAnchorEl] = useState(null);
   const [challengeSource, setChallengeSource] = useState(initialChallengeSource);
+  const [selectedDifficulty, setSelectedDifficulty] = useState(initialDifficulty);
+  const [rematchDialog, setRematchDialog] = useState(false);
+  const [rematchTimer, setRematchTimer] = useState(10);
+  const [rematchRequested, setRematchRequested] = useState(false);
+  const [rematchRequestCount, setRematchRequestCount] = useState(0);
   const isInitialized = React.useRef(false);
 
   // Profile menu handlers
@@ -70,7 +75,7 @@ const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit
   useEffect(() => {
     if (!roomId) return;
 
-    socket.emit('joinChallenge', roomId, (response) => {
+    socket.emit('joinChallenge', { roomId, difficulty: initialDifficulty }, (response) => {
       if (response.error) {
         setNotification({
           open: true,
@@ -83,6 +88,9 @@ const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit
       
       setChallenge(response.challenge);
       setChallengeSource(response.challengeSource);
+      if (response.selectedDifficulty) {
+        setSelectedDifficulty(response.selectedDifficulty);
+      }
       // Only set boilerplate code on first initialization
       if (!isInitialized.current) {
         setCode(response.challenge.boilerplateCode[language]);
@@ -99,11 +107,9 @@ const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit
     socket.on('gameStart', ({ challenge, challengeSource, startTime }) => {
       setChallenge(challenge);
       setChallengeSource(challengeSource);
-      // Only set boilerplate code on first initialization
-      if (!isInitialized.current) {
-        setCode(challenge.boilerplateCode[language]);
-        isInitialized.current = true;
-      }
+      // Always set boilerplate code for new challenges (including rematch)
+      setCode(challenge.boilerplateCode[language]);
+      isInitialized.current = true;
       setStatus('started');
       setStartTime(startTime);
       setTimeLeft(challenge.timeLimit);
@@ -171,6 +177,80 @@ const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit
       });
     });
 
+    socket.on('rematchRequested', ({ requestingPlayer, totalRequests }) => {
+      setRematchRequestCount(totalRequests);
+      if (requestingPlayer !== socket.id) {
+        if (totalRequests === 2) {
+          setNotification({
+            open: true,
+            message: 'Both players requested rematch! Starting new game...',
+            severity: 'success'
+          });
+        } else {
+          setNotification({
+            open: true,
+            message: 'Your opponent has requested a rematch!',
+            severity: 'info'
+          });
+        }
+      }
+    });
+
+    socket.on('rematchStarting', ({ challenge, challengeSource, selectedDifficulty }) => {
+      setChallenge(challenge);
+      setChallengeSource(challengeSource);
+      setSelectedDifficulty(selectedDifficulty);
+      setRematchDialog(false);
+      setRematchTimer(0); // Stop the timer
+      setRematchRequested(false);
+      setRematchRequestCount(0);
+      
+      // Reset game state
+      setStatus('waiting');
+      setTimeLeft(null);
+      setStartTime(null);
+      setResult(null);
+      setSomeoneWon(false);
+      setFinalSubmissionTime(null);
+      setFinalTimeRemaining(null);
+      setGameResult(null);
+      setGameOverDialog(false);
+      setHasUserTyped(false);
+      isInitialized.current = false;
+      
+      setNotification({
+        open: true,
+        message: 'Rematch starting with a new challenge!',
+        severity: 'success'
+      });
+    });
+
+    socket.on('rematchDeclined', ({ decliningPlayer }) => {
+      if (decliningPlayer !== socket.id) {
+        setNotification({
+          open: true,
+          message: 'Your opponent declined the rematch.',
+          severity: 'warning'
+        });
+      }
+      setRematchDialog(false);
+      setRematchTimer(0);
+      setRematchRequested(false);
+      setRematchRequestCount(0);
+    });
+
+    socket.on('rematchError', ({ error }) => {
+      setNotification({
+        open: true,
+        message: error,
+        severity: 'error'
+      });
+      setRematchDialog(false);
+      setRematchTimer(0);
+      setRematchRequested(false);
+      setRematchRequestCount(0);
+    });
+
     socket.on('playerLeft', () => {
       setNotification({
         open: true,
@@ -185,6 +265,10 @@ const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit
       socket.off('submissionResult');
       socket.off('gameOver');
       socket.off('playerLeft');
+      socket.off('rematchRequested');
+      socket.off('rematchStarting');
+      socket.off('rematchDeclined');
+      socket.off('rematchError');
     };
   }, [roomId, onExit, language]);
 
@@ -213,9 +297,11 @@ const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit
   const handleLanguageChange = (event) => {
     const newLang = event.target.value;
     setLanguage(newLang);
-    // Only reset to boilerplate if user hasn't typed anything yet
-    if (challenge && challenge.boilerplateCode[newLang] && !hasUserTyped) {
+    // Always reset to boilerplate for the new language
+    if (challenge && challenge.boilerplateCode && challenge.boilerplateCode[newLang]) {
       setCode(challenge.boilerplateCode[newLang]);
+    } else {
+      setCode('');
     }
   };
 
@@ -249,7 +335,48 @@ const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit
 
   const handleCloseGameOverDialog = () => {
     setGameOverDialog(false);
+    // Start rematch timer after game over dialog closes
+    setRematchDialog(true);
+    setRematchTimer(10);
   };
+
+  const handleRequestRematch = () => {
+    setRematchRequested(true);
+    socket.emit('requestRematch', { roomId, difficulty: selectedDifficulty });
+    setNotification({
+      open: true,
+      message: 'Rematch requested! Waiting for opponent...',
+      severity: 'info'
+    });
+  };
+
+  const handleDeclineRematch = () => {
+    socket.emit('declineRematch', { roomId });
+    setRematchDialog(false);
+    setRematchTimer(0);
+    setRematchRequested(false);
+    setRematchRequestCount(0);
+  };
+
+  // Rematch timer effect
+  useEffect(() => {
+    let timer;
+    if (rematchDialog && rematchTimer > 0 && rematchRequestCount < 2) {
+      timer = setInterval(() => {
+        setRematchTimer(prev => {
+          if (prev <= 1) {
+            // Auto-decline if timer runs out and not both players have requested
+            setTimeout(() => {
+              handleDeclineRematch();
+            }, 100);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [rematchDialog, rematchTimer, rematchRequestCount]);
 
   if (!challenge) {
     return (
@@ -386,10 +513,10 @@ const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
                 <Chip 
-                  label={challenge.difficulty.toUpperCase()} 
+                  label={selectedDifficulty ? selectedDifficulty.toUpperCase() : (challenge.difficulty || '').toUpperCase()} 
                   color={
-                    challenge.difficulty === 'easy' ? 'success' : 
-                    challenge.difficulty === 'medium' ? 'warning' : 'error'
+                    (selectedDifficulty === 'Beginner' || challenge.difficulty === 'easy') ? 'success' : 
+                    (selectedDifficulty === 'Intermediate' || challenge.difficulty === 'medium') ? 'warning' : 'error'
                   }
                 />
                 {challengeSource === 'gemini' && (
@@ -802,6 +929,93 @@ const ChallengeRoom = ({ roomId, challengeSource: initialChallengeSource, onExit
               }}
             >
               Continue
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Rematch Dialog */}
+        <Dialog
+          open={rematchDialog}
+          onClose={handleDeclineRematch}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+            }
+          }}
+        >
+          <DialogContent sx={{ textAlign: 'center', py: 4 }}>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: '#333' }}>
+                🏆 REMATCH? 🏆
+              </Typography>
+              <Typography variant="h6" sx={{ mb: 2, color: '#666' }}>
+                Ready for another challenge?
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 3, color: '#666' }}>
+                A new AI-generated problem will be created for both players.
+              </Typography>
+            </Box>
+            
+            <Box sx={{ 
+              bgcolor: 'rgba(102, 126, 234, 0.1)', 
+              p: 2, 
+              borderRadius: 2, 
+              mb: 3,
+              border: '1px solid rgba(102, 126, 234, 0.2)',
+            }}>
+              <Typography variant="h6" sx={{ mb: 1, color: '#333' }}>
+                Time Remaining: {rematchTimer}s
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#666' }}>
+                {rematchRequested ? 'You requested rematch' : 'Waiting for your decision...'}
+              </Typography>
+              {rematchRequestCount > 0 && (
+                <Typography variant="body2" sx={{ color: '#666', mt: 1 }}>
+                  {rematchRequestCount}/2 players ready
+                </Typography>
+              )}
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ justifyContent: 'center', pb: 3, gap: 2 }}>
+            <Button
+              variant="contained"
+              onClick={handleRequestRematch}
+              disabled={rematchRequested}
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                minWidth: 120,
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                },
+                '&:disabled': {
+                  background: 'rgba(102, 126, 234, 0.5)',
+                  color: 'white',
+                },
+              }}
+            >
+              {rematchRequested ? 'Requested' : 'REMATCH'}
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={handleDeclineRematch}
+              sx={{
+                color: '#666',
+                borderColor: '#666',
+                minWidth: 120,
+                '&:hover': {
+                  borderColor: '#333',
+                  color: '#333',
+                },
+              }}
+            >
+              Cancel
             </Button>
           </DialogActions>
         </Dialog>

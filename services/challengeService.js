@@ -377,18 +377,28 @@ public class Main {
   }
 ];
 
+function enforceTraditionalBoilerplate(challenge) {
+  if (!challenge.boilerplateCode) challenge.boilerplateCode = {};
+  challenge.boilerplateCode.cpp = `#include<iostream>\nint main(){\n    return 0;\n}`;
+  challenge.boilerplateCode.java = `import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        Scanner scanner = new Scanner(System.in);\n    }\n}`;
+  challenge.boilerplateCode.python = `# Enter your python code below`;
+}
+
 async function generateCodingChallenge() {
   try {
     // Try to generate a challenge using Gemini
     console.log('Attempting to generate challenge with Gemini...');
     const challenge = await generateChallengeGemini();
     console.log('Successfully generated challenge with Gemini:', challenge.title);
+    enforceTraditionalBoilerplate(challenge);
     return challenge;
   } catch (error) {
     console.error('Failed to generate challenge with Gemini, falling back to sample:', error);
     // Fall back to a random sample challenge if Gemini fails
     const randomIndex = Math.floor(Math.random() * SAMPLE_CHALLENGES.length);
-    return SAMPLE_CHALLENGES[randomIndex];
+    const challenge = SAMPLE_CHALLENGES[randomIndex];
+    enforceTraditionalBoilerplate(challenge);
+    return challenge;
   }
 }
 

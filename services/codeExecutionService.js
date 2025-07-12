@@ -448,10 +448,11 @@ class CodeExecutionService {
 
     for (const testCase of testCases) {
       const result = await this.executeCode(code, language, testCase.input);
-      const passed = result.output.trim() === testCase.output.trim();
-      
+      // Always compare as strings
+      const expected = String(testCase.output).trim();
+      const actual = String(result.output).trim();
+      const passed = actual === expected;
       if (!passed) allTestsPassed = false;
-
       results.push({
         passed,
         input: testCase.input,

@@ -10,51 +10,17 @@ const LANGUAGE_IDS = {
 
 // Simple boilerplate code for each language
 const LANGUAGE_BOILERPLATES = {
-  cpp: `#include <iostream>
-#include <string>
-#include <vector>
-#include <sstream>
-using namespace std;
-
-int main() {
-    string line;
-    getline(cin, line);
-    
-    istringstream iss(line);
-    vector<int> nums;
-    int num;
-    while (iss >> num) {
-        nums.push_back(num);
-    }
-    
-    // Write your code here
-    
+  cpp: `#include<iostream>
+int main(){
     return 0;
 }`,
-
   java: `import java.util.*;
-
 public class Main {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
-        String line = scanner.nextLine();
-        String[] parts = line.trim().split("\\s+");
-        int[] nums = new int[parts.length];
-        for (int i = 0; i < parts.length; i++) {
-            nums[i] = Integer.parseInt(parts[i]);
-        }
-        
-        // Write your code here
-        
-        scanner.close();
     }
 }`,
-
-  python: `# Read space-separated integers from input
-nums = list(map(int, input().strip().split()))
-
-# Write your code here
-`
+  python: `# Enter your python code below`
 };
 
 // Default options for Judge0 API

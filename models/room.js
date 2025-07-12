@@ -8,6 +8,7 @@ const RoomSchema = new mongoose.Schema({
     id: String,
     ready: Boolean
   }],
+  selectedDifficulty: { type: String, enum: ['Beginner', 'Intermediate', 'Advanced'], required: false },
   solutions: { type: Object, default: {} },
   started: { type: Boolean, default: false },
   startTime: { type: Number, default: null },

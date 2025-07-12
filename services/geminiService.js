@@ -68,10 +68,52 @@ Vary the topic and difficulty. Use the following structure:
 }
 Return only the JSON object.`;
 
-async function generatePracticeChallengesGemini(n = 5) {
+function enforceTraditionalBoilerplate(challenge) {
+  if (!challenge.boilerplateCode) challenge.boilerplateCode = {};
+  challenge.boilerplateCode.cpp = `#include<iostream>\nint main(){\n    return 0;\n}`;
+  challenge.boilerplateCode.java = `import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n        Scanner scanner = new Scanner(System.in);\n    }\n}`;
+  challenge.boilerplateCode.python = `# Enter your python code below`;
+}
+
+async function generatePracticeChallengesGemini(n = 5, difficulty = 'Beginner') {
+  // Map user-friendly difficulty to prompt values
+  const difficultyMap = {
+    'Beginner': 'easy',
+    'Intermediate': 'medium',
+    'Advanced': 'hard'
+  };
+  const promptDifficulty = difficultyMap[difficulty] || 'easy';
+  const prompt = `Generate an array of ${n} unique coding challenges in JSON format. Each challenge should have the following structure:\n\n{
+  "id": "unique-id",
+  "title": "Challenge title",
+  "description": "Detailed problem description",
+  "difficulty": "${promptDifficulty}",
+  "timeLimit": 300,
+  "inputFormat": "Description of input format",
+  "outputFormat": "Description of expected output format",
+  "constraints": ["List of constraints"],
+  "examples": [
+    {
+      "input": "Sample input",
+      "output": "Expected output",
+      "explanation": "Explanation of the example"
+    }
+  ],
+  "testCases": [
+    {
+      "input": "Test input",
+      "output": "Expected output"
+    }
+  ],
+  "boilerplateCode": {
+    "python": "Python starter code",
+    "cpp": "C++ starter code",
+    "java": "Java starter code"
+  }
+}\n\nAll challenges must be at the ${promptDifficulty} difficulty level. Do NOT generate classic problems like reversing a string, palindrome, or anagrams. Return only the JSON array.`;
   try {
     const response = await axios.post(apiUrl, {
-      contents: [{ parts: [{ text: practicePrompt }] }],
+      contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 3000
@@ -94,18 +136,28 @@ async function generatePracticeChallengesGemini(n = 5) {
       }
     }
     // Optionally, slice to n challenges
-    return Array.isArray(challenges) ? challenges.slice(0, n) : [];
+    challenges = Array.isArray(challenges) ? challenges.slice(0, n) : [];
+    challenges.forEach(enforceTraditionalBoilerplate);
+    return challenges;
   } catch (error) {
     console.error('Gemini API error:', error.response?.data || error.message);
     throw error;
   }
 }
 
-async function generateChallengeGemini() {
+async function generateChallengeGemini(difficulty = 'Beginner') {
+  // Map user-friendly difficulty to prompt values
+  const difficultyMap = {
+    'Beginner': 'easy',
+    'Intermediate': 'medium',
+    'Advanced': 'hard'
+  };
+  const promptDifficulty = difficultyMap[difficulty] || 'easy';
+  const prompt = `Generate a unique, non-trivial coding challenge in JSON format.\nDo NOT generate a problem about reversing a string, palindrome, anagrams, or other classic beginner problems.\nThe challenge should be suitable for a coding competition and should not repeat previous examples.\nThe challenge must be at the ${promptDifficulty} difficulty level.\nUse the following structure:\n{\n  "id": "unique-id",\n  "title": "Challenge title",\n  "description": "Detailed problem description",\n  "difficulty": "${promptDifficulty}",\n  "timeLimit": 300,\n  "inputFormat": "Description of input format",\n  "outputFormat": "Description of expected output format",\n  "constraints": ["List of constraints"],\n  "examples": [\n    {\n      "input": "Sample input",\n      "output": "Expected output",\n      "explanation": "Explanation of the example"\n    }\n  ],\n  "testCases": [\n    {\n      "input": "Test input",\n      "output": "Expected output"\n    }\n  ],\n  "boilerplateCode": {\n    "python": "Python starter code",\n    "cpp": "C++ starter code",\n    "java": "Java starter code"\n  }\n}\nReturn only the JSON object.`;
   try {
     console.log('Gemini: Sending request to API...');
     const response = await axios.post(apiUrl, {
-      contents: [{ parts: [{ text: challengePrompt }] }],
+      contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.95,
         maxOutputTokens: 2000
@@ -133,6 +185,7 @@ async function generateChallengeGemini() {
         throw new Error('Failed to parse Gemini JSON');
       }
     }
+    enforceTraditionalBoilerplate(challenge);
     return challenge;
   } catch (error) {
     console.error('Gemini API error:', error.response?.data || error.message);

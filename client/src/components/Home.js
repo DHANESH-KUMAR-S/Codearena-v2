@@ -28,6 +28,10 @@ import ChallengeRoom from './ChallengeRoom';
 import PracticeRoom from './PracticeRoom';
 import { socket } from '../socket';
 import './Login.css';
+import Select from '@mui/material/Select';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 const runningTexts = [
   'Real-time coding battles',
@@ -51,6 +55,7 @@ function Home({ user, onLogout }) {
   const [textIndex, setTextIndex] = useState(0);
   const [profileAnchorEl, setProfileAnchorEl] = useState(null);
   const [challengeSource, setChallengeSource] = useState(null);
+  const [selectedDifficulty, setSelectedDifficulty] = useState('');
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -78,7 +83,7 @@ function Home({ user, onLogout }) {
 
   const handleCreateChallenge = () => {
     setLoading(true);
-    socket.emit('createChallenge', (response) => {
+    socket.emit('createChallenge', { difficulty: selectedDifficulty }, (response) => {
       setLoading(false);
       if (response.error) {
         setError(response.error);
@@ -132,10 +137,10 @@ function Home({ user, onLogout }) {
 
   // Main UI
   if (mode === 'practice') {
-    return <PracticeRoom onExit={handleExitChallenge} user={user} onLogout={onLogout} />;
+    return <PracticeRoom onExit={handleExitChallenge} user={user} onLogout={onLogout} difficulty={selectedDifficulty} />;
   }
   if (mode === 'challenge') {
-    return <ChallengeRoom roomId={roomId} challenge={challenge} challengeSource={challengeSource} onExit={handleExitChallenge} user={user} onLogout={onLogout} />;
+    return <ChallengeRoom roomId={roomId} challenge={challenge} challengeSource={challengeSource} onExit={handleExitChallenge} user={user} onLogout={onLogout} difficulty={selectedDifficulty} />;
   }
 
   // Home screen
@@ -255,6 +260,7 @@ function Home({ user, onLogout }) {
               backdropFilter: 'blur(20px)',
               border: '1px solid rgba(255, 255, 255, 0.2)',
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+              mb: 2,
             }}
           >
             <Typography
@@ -286,6 +292,50 @@ function Home({ user, onLogout }) {
               {runningTexts[textIndex]}
             </Typography>
             
+            {/* Difficulty Selector */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mb: 3 }}>
+              <Paper elevation={4} sx={{
+                px: 2, py: 1, borderRadius: 2,
+                background: 'rgba(60, 65, 90, 0.92)',
+                border: '1.5px solid #764ba2',
+                display: 'flex', alignItems: 'center',
+                minWidth: 0,
+                boxShadow: '0 0 12px 2px #764ba233',
+              }}>
+                <Typography variant="subtitle1" sx={{ color: '#b7aaff', fontWeight: 600, mr: 1, letterSpacing: 0.5 }}>
+                  Challenge Level:
+                </Typography>
+                <FormControl variant="outlined" size="small" sx={{ minWidth: 120, ml: 1, background: '#23243a', borderRadius: 1, boxShadow: '0 0 8px 1px #667eea44', border: '1.5px solid #667eea' }}>
+                  <Select
+                    value={selectedDifficulty}
+                    onChange={e => setSelectedDifficulty(e.target.value)}
+                    displayEmpty
+                    sx={{ fontWeight: 600, fontSize: 15, color: 'white', background: '#23243a', borderRadius: 1, border: 'none', boxShadow: '0 0 6px 1px #667eea55' }}
+                    MenuProps={{
+                      PaperProps: {
+                        sx: {
+                          background: '#23243a',
+                          color: 'white',
+                          border: '1.5px solid #667eea',
+                        }
+                      }
+                    }}
+                  >
+                    <MenuItem value="" disabled>Select...</MenuItem>
+                    <MenuItem value="Beginner">
+                      <span role="img" aria-label="Beginner">🟢</span> Beginner
+                    </MenuItem>
+                    <MenuItem value="Intermediate">
+                      <span role="img" aria-label="Intermediate">🟡</span> Intermediate
+                    </MenuItem>
+                    <MenuItem value="Advanced">
+                      <span role="img" aria-label="Advanced">🔴</span> Advanced
+                    </MenuItem>
+                  </Select>
+                </FormControl>
+              </Paper>
+            </Box>
+
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Button
@@ -293,7 +343,7 @@ function Home({ user, onLogout }) {
                   size="large"
                   fullWidth
                   onClick={handleStartPractice}
-                  disabled={loading}
+                  disabled={loading || !selectedDifficulty}
                   sx={{
                     py: 2,
                     fontSize: 18,
@@ -338,7 +388,7 @@ function Home({ user, onLogout }) {
                   size="large"
                   fullWidth
                   onClick={handleCreateChallenge}
-                  disabled={loading}
+                  disabled={loading || !selectedDifficulty}
                   sx={{
                     py: 2,
                     fontSize: 18,
