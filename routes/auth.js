@@ -10,6 +10,13 @@ router.post('/register', async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
+    // Validate input
+    if (!username || !email || !password) {
+      return res.status(400).json({ 
+        error: 'Username, email, and password are required' 
+      });
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({ 
       $or: [{ username }, { email }] 
@@ -29,6 +36,7 @@ router.post('/register', async (req, res) => {
     });
 
     await user.save();
+    console.log('User registered successfully:', username);
 
     // Generate JWT token
     const token = jwt.sign(
@@ -49,6 +57,22 @@ router.post('/register', async (req, res) => {
 
   } catch (error) {
     console.error('Registration error:', error);
+    
+    // Check if it's a MongoDB connection error
+    if (error.name === 'MongoNetworkError' || error.name === 'MongoServerSelectionError') {
+      return res.status(500).json({ 
+        error: 'Database connection failed. Please try again later.' 
+      });
+    }
+    
+    // Check if it's a validation error
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        error: errors.join(', ') 
+      });
+    }
+    
     res.status(500).json({ 
       error: 'Internal server error' 
     });
@@ -59,6 +83,13 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
+
+    // Validate input
+    if (!username || !password) {
+      return res.status(400).json({ 
+        error: 'Username and password are required' 
+      });
+    }
 
     // Find user by username or email
     const user = await User.findOne({
@@ -82,6 +113,7 @@ router.post('/login', async (req, res) => {
     // Update last login
     user.lastLogin = new Date();
     await user.save();
+    console.log('User logged in successfully:', username);
 
     // Generate JWT token
     const token = jwt.sign(
@@ -102,6 +134,14 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error('Login error:', error);
+    
+    // Check if it's a MongoDB connection error
+    if (error.name === 'MongoNetworkError' || error.name === 'MongoServerSelectionError') {
+      return res.status(500).json({ 
+        error: 'Database connection failed. Please try again later.' 
+      });
+    }
+    
     res.status(500).json({ 
       error: 'Internal server error' 
     });
