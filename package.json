@@ -1,7 +1,7 @@
 {
   "name": "code-execution-service",
   "version": "1.0.0",
-  "description": "A simple code execution service using Docker",
+  "description": "A simple code execution service using Railway",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -13,7 +13,6 @@
     "bcryptjs": "^3.0.2",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
-    "dockerode": "^3.3.1",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
@@ -23,5 +22,8 @@
   },
   "devDependencies": {
     "nodemon": "^2.0.22"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
