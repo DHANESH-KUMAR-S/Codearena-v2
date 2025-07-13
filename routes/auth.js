@@ -1,10 +1,11 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
-const router = express.Router();
+const config = require('../config');
 const mongoose = require('mongoose'); // Added for mongoose.connection.readyState
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const router = express.Router();
 
 // Register new user
 router.post('/register', async (req, res) => {
@@ -49,7 +50,7 @@ router.post('/register', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { userId: user._id, username: user.username },
-      JWT_SECRET,
+      config.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -136,7 +137,7 @@ router.post('/login', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { userId: user._id, username: user.username },
-      JWT_SECRET,
+      config.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -178,7 +179,7 @@ const verifyToken = (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, config.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {

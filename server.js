@@ -1,6 +1,9 @@
 // Load environment variables from .env file
 require('dotenv').config();
 
+// Load config file
+const config = require('./config');
+
 // require('./services/mongo');
 const express = require('express');
 const http = require('http');
@@ -84,10 +87,10 @@ io.on('error', (error) => {
   console.error('Socket.IO error:', error);
 });
 
-const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/codearena';
+const mongoUri = config.MONGODB_URI;
 console.log('DEBUG: Environment variables:');
-console.log('DEBUG: MONGODB_URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
-console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
+console.log('DEBUG: MONGODB_URI:', config.MONGODB_URI ? 'SET' : 'NOT SET');
+console.log('DEBUG: NODE_ENV:', config.NODE_ENV);
 console.log('DEBUG: Using mongoUri:', mongoUri);
 
 // MongoDB connection options
@@ -559,7 +562,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = config.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 }); 
