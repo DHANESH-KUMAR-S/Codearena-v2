@@ -100,7 +100,14 @@ class RailwayCodeExecutionService {
 
   async compileCode(filePath, config) {
     return new Promise((resolve) => {
-      const compileProcess = spawn(config.compileCommand, [filePath], {
+      let compileArgs = [filePath];
+      
+      // Special handling for C++ to compile to a.out
+      if (config.compileCommand === 'g++') {
+        compileArgs = ['-o', 'a.out', filePath];
+      }
+      
+      const compileProcess = spawn(config.compileCommand, compileArgs, {
         cwd: this.tmpDir,
         shell: true
       });
@@ -235,7 +242,7 @@ class RailwayCodeExecutionService {
     return {
       python: {
         fileExtension: '.py',
-        command: 'python',
+        command: 'python3',
         runCommand: (filePath) => [filePath]
       },
       java: {
