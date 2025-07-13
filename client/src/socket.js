@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:5000';
+// Use the same host as the current page for Socket.IO connection
+const SOCKET_URL = window.location.origin;
 
 export const socket = io(SOCKET_URL, {
   reconnection: true,
