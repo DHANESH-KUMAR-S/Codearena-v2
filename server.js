@@ -1,3 +1,6 @@
+// Load environment variables from .env file
+require('dotenv').config();
+
 // require('./services/mongo');
 const express = require('express');
 const http = require('http');
