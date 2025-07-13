@@ -41,6 +41,26 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Debug endpoint for MongoDB connection
+app.get('/debug/mongo', (req, res) => {
+  const connectionState = mongoose.connection.readyState;
+  const stateMap = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  res.json({
+    readyState: connectionState,
+    state: stateMap[connectionState] || 'unknown',
+    host: mongoose.connection.host,
+    port: mongoose.connection.port,
+    name: mongoose.connection.name,
+    mongoUri: process.env.MONGODB_URI ? 'SET' : 'NOT SET'
+  });
+});
+
 // Handle React routing, return all requests to React app
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
@@ -66,9 +86,46 @@ console.log('DEBUG: Environment variables:');
 console.log('DEBUG: MONGODB_URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
 console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 console.log('DEBUG: Using mongoUri:', mongoUri);
-mongoose.connect(mongoUri)
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB connection error:', err));
+
+// MongoDB connection options
+const mongooseOptions = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+  socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+  bufferMaxEntries: 0, // Disable mongoose buffering
+  bufferCommands: false, // Disable mongoose buffering
+  maxPoolSize: 10, // Maintain up to 10 socket connections
+  serverApi: {
+    version: '1',
+    strict: true,
+    deprecationErrors: true,
+  }
+};
+
+mongoose.connect(mongoUri, mongooseOptions)
+  .then(() => {
+    console.log('MongoDB connected successfully');
+    console.log('Connection state:', mongoose.connection.readyState);
+  })
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+    console.error('Connection failed. Please check your MONGODB_URI environment variable.');
+    // Don't exit the process, let it continue without DB
+  });
+
+// Handle MongoDB connection events
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected');
+});
+
+mongoose.connection.on('connected', () => {
+  console.log('MongoDB connected');
+});
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);

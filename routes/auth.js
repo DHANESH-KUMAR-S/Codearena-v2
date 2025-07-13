@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 const router = express.Router();
+const mongoose = require('mongoose'); // Added for mongoose.connection.readyState
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -14,6 +15,13 @@ router.post('/register', async (req, res) => {
     if (!username || !email || !password) {
       return res.status(400).json({ 
         error: 'Username, email, and password are required' 
+      });
+    }
+
+    // Check MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        error: 'Database is not connected. Please try again later.' 
       });
     }
 
@@ -59,8 +67,11 @@ router.post('/register', async (req, res) => {
     console.error('Registration error:', error);
     
     // Check if it's a MongoDB connection error
-    if (error.name === 'MongoNetworkError' || error.name === 'MongoServerSelectionError') {
-      return res.status(500).json({ 
+    if (error.name === 'MongoNetworkError' || 
+        error.name === 'MongoServerSelectionError' || 
+        error.name === 'MongooseError' ||
+        error.message.includes('buffering timed out')) {
+      return res.status(503).json({ 
         error: 'Database connection failed. Please try again later.' 
       });
     }
@@ -88,6 +99,13 @@ router.post('/login', async (req, res) => {
     if (!username || !password) {
       return res.status(400).json({ 
         error: 'Username and password are required' 
+      });
+    }
+
+    // Check MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        error: 'Database is not connected. Please try again later.' 
       });
     }
 
@@ -136,8 +154,11 @@ router.post('/login', async (req, res) => {
     console.error('Login error:', error);
     
     // Check if it's a MongoDB connection error
-    if (error.name === 'MongoNetworkError' || error.name === 'MongoServerSelectionError') {
-      return res.status(500).json({ 
+    if (error.name === 'MongoNetworkError' || 
+        error.name === 'MongoServerSelectionError' || 
+        error.name === 'MongooseError' ||
+        error.message.includes('buffering timed out')) {
+      return res.status(503).json({ 
         error: 'Database connection failed. Please try again later.' 
       });
     }
