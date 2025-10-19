@@ -6,7 +6,7 @@ module.exports = {
   JWT_SECRET: '8af3f57d0d510dbb903604500dcd6663',
   
   // Gemini API Key for AI challenges
-  GEMINI_API_KEY: 'AIzaSyCOFOoppNQRakvBcKyKmWHEHpMBPODi9s4', // Replace with your actual Gemini API key
+  GEMINI_API_KEY: 'AIzaSyCcB5N7GIAUh1D4jzFZAbmJxtMgjb4Bxa4', // Replace with your actual Gemini API key
   
   // Environment
   NODE_ENV: 'production',
