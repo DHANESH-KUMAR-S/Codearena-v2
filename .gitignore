@@ -1,0 +1,11 @@
+# Node
+node_modules/
+client/node_modules/
+client/node_modules/.cache/
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+*.log
