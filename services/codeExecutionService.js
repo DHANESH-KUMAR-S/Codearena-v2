@@ -94,10 +94,10 @@ class CodeExecutionService {
         let dockerfileContent;
         if (input) {
           // If input is provided, copy input file and use input redirection in CMD
-          dockerfileContent = `FROM openjdk:17-slim\nWORKDIR /code\nCOPY Main.java .\nCOPY Main.java.input .\nRUN javac Main.java\nCMD [\"sh\", \"-c\", \"java Main < Main.java.input\"]\n`;
+          dockerfileContent = `FROM openjdk:17-jdk-slim\nWORKDIR /code\nCOPY Main.java .\nCOPY Main.java.input .\nRUN javac Main.java\nCMD ["sh", "-c", "java Main < Main.java.input"]\n`;
         } else {
           // No input, just run normally
-          dockerfileContent = `FROM openjdk:17-slim\nWORKDIR /code\nCOPY Main.java .\nRUN javac Main.java\nCMD [\"java\", \"Main\"]\n`;
+          dockerfileContent = `FROM openjdk:17-jdk-slim\nWORKDIR /code\nCOPY Main.java .\nRUN javac Main.java\nCMD ["java", "Main"]\n`;
         }
         fs.writeFileSync(path.join(workDir, 'Dockerfile'), dockerfileContent, { encoding: 'utf8' });
       } else {
@@ -433,7 +433,7 @@ class CodeExecutionService {
       },
       cpp: {
         fileExtension: '.cpp',
-        image: 'gcc:12.2.0',
+        image: 'gcc:12.2.0-bullseye',
         compile: true,
         compileCommand: function(filePath) {
           // Always use /code/<filename> for Docker
