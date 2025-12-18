@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const apiKey = process.env.GEMINI_API_KEY || "AIzaSyBdnt1MxUCaW_fSAoxJ0ubIngKWU6ulW3o";
+const apiKey = process.env.GEMINI_API_KEY;
 const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
 const practicePrompt = `Generate an array of 5 unique coding challenges in JSON format. Each challenge should have the following structure:
