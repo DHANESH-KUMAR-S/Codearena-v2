@@ -62,7 +62,6 @@ class CodeExecutionService {
     let filePath = path.join(this.tmpDir, fileName);
     let inputPath;
     let javaTempDir = null;
-    let javaImageTag = null;
     if (language === 'java') {
       // Create a unique subdirectory for Java execution
       const javaUUID = `java-${uuidv4()}`;
@@ -73,7 +72,6 @@ class CodeExecutionService {
       workDir = javaTempDir;
       fileName = 'Main.java';
       filePath = path.join(workDir, fileName);
-      javaImageTag = `java-runner-${javaUUID}`;
     }
     
     // Debug: Print file paths and workDir for C++
@@ -88,18 +86,8 @@ class CodeExecutionService {
       const wrappedCode = config.inputWrapper ? config.inputWrapper(code) : code;
 
       // Write code to file
-      // For Java, force Unix line endings
       if (language === 'java') {
         fs.writeFileSync(filePath, wrappedCode.replace(/\r\n/g, '\n'), { encoding: 'utf8' });
-        let dockerfileContent;
-        if (input) {
-          // If input is provided, copy input file and use input redirection in CMD
-          dockerfileContent = `FROM openjdk:17-jdk-slim\nWORKDIR /code\nCOPY Main.java .\nCOPY Main.java.input .\nRUN javac Main.java\nCMD ["sh", "-c", "java Main < Main.java.input"]\n`;
-        } else {
-          // No input, just run normally
-          dockerfileContent = `FROM openjdk:17-jdk-slim\nWORKDIR /code\nCOPY Main.java .\nRUN javac Main.java\nCMD ["java", "Main"]\n`;
-        }
-        fs.writeFileSync(path.join(workDir, 'Dockerfile'), dockerfileContent, { encoding: 'utf8' });
       } else {
         fs.writeFileSync(filePath, wrappedCode, { encoding: 'utf8' });
       }
@@ -111,38 +99,61 @@ class CodeExecutionService {
       }
 
       return new Promise((resolve, reject) => {
+        let finished = false;
+        const finish = (payload) => {
+          if (finished) return;
+          finished = true;
+          resolve(payload);
+        };
+
+        const safeRemoveDir = (dirPath) => {
+          if (!dirPath) return;
+          try {
+            if (fs.existsSync(dirPath)) {
+              fs.rmSync(dirPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+            }
+          } catch (e) {
+            // Best-effort cleanup only; don't crash the server on Windows file locks.
+            console.warn('Warning: Failed to remove temp dir:', dirPath, e?.message || e);
+          }
+        };
+
         const executeInDocker = async () => {
           if (language === 'java') {
-            // Build the Docker image
-            await new Promise((resolveBuild, rejectBuild) => {
-              const buildProcess = spawn('docker', ['build', '-t', javaImageTag, '.'], { cwd: workDir, shell: true });
-              buildProcess.stdout.on('data', (data) => {
-                console.log('Docker build output:', data.toString());
-              });
-              buildProcess.stderr.on('data', (data) => {
-                console.error('Docker build error:', data.toString());
-              });
-              buildProcess.on('close', (code) => {
-                if (code !== 0) {
-                  rejectBuild(new Error('Docker build failed'));
-                } else {
-                  resolveBuild();
-                }
-              });
-            });
-            // Run the container
-            const runArgs = [
+            const timeoutMs = 20000;
+            const dockerArgs = [
               'run',
               '--rm',
               '--network', 'none',
               '--memory', '128m',
               '--memory-swap', '128m',
               '--cpus', '0.5',
-              javaImageTag
+              '-v', `${toDockerPath(workDir)}:/code`,
+              '-w', '/code',
+              config.image,
+              'bash', '-c',
+              inputPath
+                ? `"javac Main.java && java Main < Main.java.input"`
+                : `"javac Main.java && java Main"`
             ];
-            const docker = spawn('docker', runArgs, { cwd: workDir, shell: true, stdio: ['pipe', 'pipe', 'pipe'] });
+
+            console.log('Running Docker command:', 'docker', dockerArgs.join(' '));
+
+            const docker = spawn('docker', dockerArgs, { cwd: workDir, shell: true, stdio: ['pipe', 'pipe', 'pipe'] });
             let stdout = '';
             let stderr = '';
+            const timeoutId = setTimeout(() => {
+              docker.kill();
+              safeRemoveDir(javaTempDir);
+              finish({
+                status: 'Time Limit Exceeded',
+                output: stdout,
+                error: 'Execution timed out',
+                time: timeoutMs / 1000,
+                memory: null
+              });
+            }, timeoutMs);
+
             docker.stdout.on('data', (data) => {
               const output = data.toString();
               stdout += output;
@@ -154,13 +165,10 @@ class CodeExecutionService {
               console.error('stderr:', output);
             });
             docker.on('close', (code) => {
-              // Clean up: remove image and temp dir
-              spawn('docker', ['rmi', '-f', javaImageTag], { shell: true });
-              if (javaTempDir && fs.existsSync(javaTempDir)) {
-                fs.rmSync(javaTempDir, { recursive: true, force: true });
-              }
+              clearTimeout(timeoutId);
+              safeRemoveDir(javaTempDir);
               if (code !== 0) {
-                resolve({
+                finish({
                   status: 'Runtime Error',
                   output: stdout,
                   error: stderr || 'Execution failed',
@@ -168,7 +176,7 @@ class CodeExecutionService {
                   memory: null
                 });
               } else {
-                resolve({
+                finish({
                   status: 'Accepted',
                   output: stdout,
                   error: stderr,
@@ -178,11 +186,9 @@ class CodeExecutionService {
               }
             });
             docker.on('error', (error) => {
-              spawn('docker', ['rmi', '-f', javaImageTag], { shell: true });
-              if (javaTempDir && fs.existsSync(javaTempDir)) {
-                fs.rmSync(javaTempDir, { recursive: true, force: true });
-              }
-              resolve({
+              clearTimeout(timeoutId);
+              safeRemoveDir(javaTempDir);
+              finish({
                 status: 'Internal Error',
                 output: '',
                 error: error.message,
@@ -190,20 +196,6 @@ class CodeExecutionService {
                 memory: null
               });
             });
-            setTimeout(() => {
-              docker.kill();
-              spawn('docker', ['rmi', '-f', javaImageTag], { shell: true });
-              if (javaTempDir && fs.existsSync(javaTempDir)) {
-                fs.rmSync(javaTempDir, { recursive: true, force: true });
-              }
-              resolve({
-                status: 'Time Limit Exceeded',
-                output: '',
-                error: 'Execution timed out',
-                time: 10,
-                memory: null
-              });
-            }, 10000);
             return;
           }
 
@@ -331,7 +323,7 @@ class CodeExecutionService {
             this.cleanup(filePath, inputPath);
 
             if (code !== 0) {
-              resolve({
+              finish({
                 status: 'Runtime Error',
                 output: stdout,
                 error: stderr || 'Execution failed',
@@ -339,7 +331,7 @@ class CodeExecutionService {
                 memory: null
               });
             } else {
-              resolve({
+              finish({
                 status: 'Accepted',
                 output: stdout,
                 error: stderr,
@@ -355,7 +347,7 @@ class CodeExecutionService {
             // Clean up temporary files
             this.cleanup(filePath, inputPath);
 
-            resolve({
+            finish({
               status: 'Internal Error',
               output: '',
               error: error.message,
@@ -371,7 +363,7 @@ class CodeExecutionService {
             // Clean up temporary files
             this.cleanup(filePath, inputPath);
 
-            resolve({
+            finish({
               status: 'Time Limit Exceeded',
               output: stdout,
               error: 'Execution timed out',
@@ -423,7 +415,7 @@ class CodeExecutionService {
       },
       java: {
         fileExtension: '.java',
-        image: 'openjdk:17-slim',
+        image: 'eclipse-temurin:17-jdk',
         compile: true,
         compileCommand: (filePath) => `javac ${filePath}`,
         runCommand: (filePath, inputPath) => inputPath 
@@ -433,7 +425,7 @@ class CodeExecutionService {
       },
       cpp: {
         fileExtension: '.cpp',
-        image: 'gcc:12.2.0-bullseye',
+        image: 'gcc:12.2.0',
         compile: true,
         compileCommand: function(filePath) {
           // Always use /code/<filename> for Docker
