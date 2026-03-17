@@ -122,18 +122,15 @@ async function generatePracticeChallengesGemini(n = 5, difficulty = 'Beginner') 
     // Gemini returns the result in response.data.candidates[0].content.parts[0].text
     const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) throw new Error('No content from Gemini');
-    // Try to parse the JSON array
+    // Extract JSON array - find first [ to last ]
     let challenges;
+    const arrStart = text.indexOf('[');
+    const arrEnd = text.lastIndexOf(']');
+    if (arrStart === -1 || arrEnd === -1) throw new Error('Failed to parse Gemini JSON');
     try {
-      challenges = JSON.parse(text);
+      challenges = JSON.parse(text.slice(arrStart, arrEnd + 1));
     } catch (e) {
-      // Sometimes Gemini returns markdown code block, strip it
-      const match = text.match(/```json([\s\S]*?)```/);
-      if (match) {
-        challenges = JSON.parse(match[1]);
-      } else {
-        throw new Error('Failed to parse Gemini JSON');
-      }
+      throw new Error('Failed to parse Gemini JSON');
     }
     // Optionally, slice to n challenges
     challenges = Array.isArray(challenges) ? challenges.slice(0, n) : [];
@@ -179,7 +176,7 @@ async function generateChallengeGemini(difficulty = 'Beginner') {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.95,
-        maxOutputTokens: 2000
+        maxOutputTokens: 8192
       }
     });
     // Gemini returns the result in response.data.candidates[0].content.parts[0].text
@@ -188,21 +185,18 @@ async function generateChallengeGemini(difficulty = 'Beginner') {
     
     console.log('Gemini: Raw response text:', text.substring(0, 500) + '...');
     
-    // Try to parse the JSON object
+    // Extract JSON object - find first { to last }
     let challenge;
+    const objStart = text.indexOf('{');
+    const objEnd = text.lastIndexOf('}');
+    console.log('Gemini: start index:', objStart, 'end index:', objEnd, 'text length:', text.length);
+    if (objStart === -1 || objEnd === -1) throw new Error('Failed to parse Gemini JSON');
     try {
-      challenge = JSON.parse(text);
+      challenge = JSON.parse(text.slice(objStart, objEnd + 1));
       console.log('Gemini: Successfully parsed JSON challenge:', challenge.title);
     } catch (e) {
-      console.log('Gemini: JSON parse failed, trying markdown extraction...');
-      // Sometimes Gemini returns markdown code block, strip it
-      const match = text.match(/```json([\s\S]*?)```/);
-      if (match) {
-        challenge = JSON.parse(match[1]);
-        console.log('Gemini: Successfully parsed markdown JSON challenge:', challenge.title);
-      } else {
-        throw new Error('Failed to parse Gemini JSON');
-      }
+      console.log('Gemini: JSON parse error:', e.message);
+      throw new Error('Failed to parse Gemini JSON');
     }
     // Validate and sanitize test cases to ensure they are strings
     if (challenge.testCases && Array.isArray(challenge.testCases)) {
